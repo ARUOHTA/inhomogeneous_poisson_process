@@ -1,1 +1,1 @@
-# Bayesian Sparse Imhomogeous Poisson Process Model with Spatially Varying Coefficient
+# Bayesian Sparse Inhomogeneous Poisson Process Model with Spatially Varying Coefficient
