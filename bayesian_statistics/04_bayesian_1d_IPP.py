@@ -17,7 +17,7 @@ import seaborn as sns
 
 
 # %%
-from generate_1d_ipp import lamda, generate_IPP
+from utils import lamda, generate_IPP
 
 # %% [markdown]
 # ## データの生成
