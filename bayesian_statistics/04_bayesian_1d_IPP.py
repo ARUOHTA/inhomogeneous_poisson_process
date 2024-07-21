@@ -19,8 +19,9 @@ def gibbs_sampling(X, y, z, b, B, SIM, batch_size, output_file):
     inv_B = inv(B)
     X_T = X.T
     
-    with h5py.File(output_file, 'w') as f:
+    with h5py.File(output_file, 'w', libver='latest') as f:
         dset = f.create_dataset("beta_samples", (SIM, 3), dtype='float64', chunks=True)
+        f.swmr_mode = True  # Enable SWMR mode after creating datasets
         
         for sim in tqdm(range(0, SIM, batch_size)):
             batch_size_actual = min(batch_size, SIM - sim)
@@ -34,6 +35,7 @@ def gibbs_sampling(X, y, z, b, B, SIM, batch_size, output_file):
                 batch[i] = beta_hat
             
             dset[sim:sim+batch_size_actual] = batch
+            f.flush()  # Ensure data is written to file
     
     print("Finished sampling and saving!")
 
@@ -60,7 +62,7 @@ B = np.diag(np.ones(3))
 gibbs_sampling(X, y, z, b, B, SIM, batch_size, output_file)
 
 # サンプルの読み込みと統計量の計算
-with h5py.File(output_file, 'r') as f:
+with h5py.File(output_file, 'r', libver='latest', swmr=True) as f:
     beta_samples = f['beta_samples'][:]
 
 mean = np.mean(beta_samples, axis=0)
