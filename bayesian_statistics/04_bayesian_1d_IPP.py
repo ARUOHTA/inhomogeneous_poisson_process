@@ -1,28 +1,48 @@
-# %%
-import matplotlib.pyplot as plt
 import numpy as np
-from   numpy.linalg import inv
+from numpy.linalg import inv
 import numpy.random as npr
-from   pypolyagamma import PyPolyaGamma
-from scipy.stats import multivariate_normal
-
-import matplotlib.cm as cm
+from pypolyagamma import PyPolyaGamma
 from tqdm import tqdm
+import h5py
 
-import pandas as pd
-import statsmodels.api as sm
-import scipy
-import scipy.optimize as opt
-import seaborn as sns
-
-
-# %%
 from utils import lamda, generate_IPP
 
-# %% [markdown]
-# ## データの生成
+def multi_pgdraw_vectorized(pg, B, C):
+    """Vectorized version of multi_pgdraw"""
+    return np.array([pg.pgdraw(b, c) for b, c in zip(B, C)])
 
-# %%
+def gibbs_sampling(X, y, z, b, B, SIM, batch_size, output_file):
+    pg = PyPolyaGamma()
+    beta_hat = npr.multivariate_normal(b, B)
+    k = y - z/2
+    
+    inv_B = inv(B)
+    X_T = X.T
+    
+    with h5py.File(output_file, 'w') as f:
+        dset = f.create_dataset("beta_samples", (SIM, 3), dtype='float64', chunks=True)
+        
+        for sim in tqdm(range(0, SIM, batch_size)):
+            batch_size_actual = min(batch_size, SIM - sim)
+            batch = np.zeros((batch_size_actual, 3))
+            
+            for i in tqdm(range(batch_size_actual)):
+                Omega_diag = multi_pgdraw_vectorized(pg, z, X @ beta_hat)
+                V = inv(X_T @ np.diag(Omega_diag) @ X + inv_B)
+                m = V @ (X_T @ k + inv_B @ b)
+                beta_hat = npr.multivariate_normal(m, V)
+                batch[i] = beta_hat
+            
+            dset[sim:sim+batch_size_actual] = batch
+    
+    print("Finished sampling and saving!")
+
+# 使用例
+SIM = 10000000
+batch_size = 10000
+output_file = "output/beta_samples.h5"
+
+# 変数の定義
 T = 5
 beta_true = np.array([4, 7, -4])
 n0 = 1000
@@ -33,44 +53,18 @@ X, y, t, z = generate_IPP(T, beta_true, n0, Z, verbose=True)
 print(f"Number of presence: {len(y[y==1])}")
 print(f"Number of absence: {n0}")
 
-
-# %% [markdown]
-# ## ベイズ推定
-
-# %%
-from   numpy.linalg import inv
-import numpy.random as npr
-from   pypolyagamma import PyPolyaGamma
-
-def multi_pgdraw(pg, B, C):
-    """Utility function for calling `pgdraw` on every pair in vectors B, C.
-    """
-    return np.array([pg.pgdraw(b, c) for b, c in zip(B, C)])
-
-# %%
 # 平均ベクトルと共分散行列の設定
 b = np.zeros(3)
 B = np.diag(np.ones(3))
 
-# Peform Gibbs sampling for SIM iterations.
-pg         = PyPolyaGamma()
-SIM          = 10000000
-beta_hat   = npr.multivariate_normal(b, B)
-k          = y - z/2
+gibbs_sampling(X, y, z, b, B, SIM, batch_size, output_file)
 
-beta_list = []
-for _ in tqdm(range(SIM)):
-    # ω ~ PG(1, x*β).
-    Omega_diag = multi_pgdraw(pg, z, X @ beta_hat)
-    # β ~ N(m, V).
-    V         = inv(X.T @ np.diag(Omega_diag) @ X + inv(B))
-    m         = np.dot(V, X.T @ k + inv(B) @ b)
-    beta_hat  = npr.multivariate_normal(m, V)
-    beta_list.append(beta_hat)
-    
-beta_list = np.array(beta_list)
+# サンプルの読み込みと統計量の計算
+with h5py.File(output_file, 'r') as f:
+    beta_samples = f['beta_samples'][:]
 
-# %%
-# beta_listをcsvに保存
-pd.DataFrame(beta_list).to_csv(f"beta_list_{SIM}.csv")
-print("finished!")
+mean = np.mean(beta_samples, axis=0)
+var = np.var(beta_samples, axis=0)
+
+print("Final mean:", mean)
+print("Final variance:", var)
