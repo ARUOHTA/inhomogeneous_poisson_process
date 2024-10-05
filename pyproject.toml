@@ -4,6 +4,9 @@ version = "0.1.0"
 description = ""
 authors = ["ARUOHTA <otaru1214@gmail.com>"]
 readme = "README.md"
+packages = [
+    { include = "bayesian_statistics" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -18,7 +21,6 @@ pypolyagamma = "^1.2.3"
 statsmodels = "^0.14.2"
 seaborn = "^0.13.2"
 h5py = "^3.11.0"
-
 
 [build-system]
 requires = ["poetry-core"]
