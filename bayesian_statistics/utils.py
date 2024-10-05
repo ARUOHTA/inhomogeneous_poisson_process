@@ -169,8 +169,8 @@ def multi_pgdraw_vectorized(pg: PyPolyaGamma, B: np.ndarray, C: np.ndarray) -> n
 def mcmc_sampler(
     T: float,
     intensity_func: IntensityFunction,
-    W_obs: np.ndarray,
     y_obs: np.ndarray,
+    t_obs: np.ndarray,
     num_iterations: int,
     prior_beta_mean: np.ndarray,
     prior_beta_cov: np.ndarray,
@@ -191,7 +191,7 @@ def mcmc_sampler(
         n_U = len(t_U)
 
         # 2. 結合データの作成
-        t_combined = np.concatenate([W_obs[:, 1], t_U])  # X_obs[:, 1] は時間 t を示すと仮定
+        t_combined = np.concatenate([t_obs, t_U]) 
         W_combined = intensity_func.design_matrix_func(t_combined)
         y_combined = np.concatenate([y_obs, np.zeros(n_U)])
         n_combined = len(y_combined)
