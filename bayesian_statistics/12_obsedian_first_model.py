@@ -91,12 +91,11 @@ def create_elevation_grid(df_elevation: pl.DataFrame) -> tuple[np.ndarray, np.nd
     
     return lon_mesh, lat_mesh
 
-# %%
 def preprocess_data(
     df: pl.DataFrame,
     target_period: int,
     target_origin: str
-) -> Tuple[np.ndarray, np.ndarray, float, float]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     解析用のデータを前処理
     
@@ -111,30 +110,53 @@ def preprocess_data(
         
     Returns
     -------
-    site_coords : np.ndarray
-        遺跡の座標（ラジアン）
     counts : np.ndarray
-        各遺跡での出土数
+        各遺跡での出土数（インデックスが遺跡ID）
     target_counts : np.ndarray
-        対象産地の出土数
+        対象産地の出土数（インデックスが遺跡ID）
     """
+    # 全遺跡IDのリストを取得
+    max_site_id = df['遺跡ID'].max()
+    
     # 対象時期のデータのみ抽出
     period_df = df.filter(pl.col('時期') == target_period)
-
-    site_ids = period_df['遺跡ID'].to_numpy()
     
-    # 合計出土数
-    counts = np.ones(len(period_df))
+    # 全体のカウント
+    counts = (
+        period_df
+        .group_by('遺跡ID')
+        .agg([pl.len().alias('count')])
+        .join(
+            pl.DataFrame({
+                '遺跡ID': np.arange(max_site_id + 1)
+            }),
+            on='遺跡ID',
+            how='right'
+        )
+        .fill_null(0)
+        .sort('遺跡ID')['count']
+        .to_numpy()
+    )
     
-    # 対象産地の出土数
-    target_counts = period_df.with_columns(
-        pl.when(pl.col('産地カテゴリ') == target_origin)
-        .then(1)
-        .otherwise(0)
-        .alias('target_count')
-    )['target_count'].to_numpy()
+    # 対象産地のカウント
+    target_counts = (
+        period_df
+        .filter(pl.col('産地カテゴリ') == target_origin)
+        .group_by('遺跡ID')
+        .agg([pl.len().alias('count')])
+        .join(
+            pl.DataFrame({
+                '遺跡ID': np.arange(max_site_id + 1)
+            }),
+            on='遺跡ID',
+            how='right'
+        )
+        .fill_null(0)
+        .sort('遺跡ID')['count']
+        .to_numpy()
+    )
     
-    return site_ids, counts, target_counts
+    return counts, target_counts
 
 def create_site_coords(df: pl.DataFrame) -> np.ndarray:
     """
@@ -172,8 +194,8 @@ def create_site_coords(df: pl.DataFrame) -> np.ndarray:
 
 # %%
 def calculate_weights_matrix(
-    grid_coords: np.ndarray,
-    site_coords: np.ndarray,
+    grid_coords: np.ndarray, #(N, 2)
+    site_coords: np.ndarray, #(M, 2)
     sigma: float,
 ) -> np.ndarray:
     """
@@ -272,8 +294,8 @@ def calculate_ratios(
         各グリッド点での重み付き比率
     """
     # 重み付き合計を計算
-    weighted_total = np.sum(weights * counts, axis=1, dtype=np.float16)
-    weighted_target = np.sum(weights * target_counts, axis=1, dtype=np.float16)
+    weighted_total = np.sum(weights * counts, axis=1)
+    weighted_target = np.sum(weights * target_counts, axis=1)
     
     # 比率計算（0除算を防ぐ）
     ratios = np.where(
@@ -352,16 +374,12 @@ def calculate_obsedian_ratio(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     # ここからtarget_period, target_originに依存する処理
-    site_ids, counts, target_counts = preprocess_data(
+    counts, target_counts = preprocess_data(
         df, target_period, target_origin
     )
 
-    weights = weights.astype(np.float16)
-    # まず、weightsの2次元目は遺跡IDに対応するので、weights[:, i]がi番目の遺跡に対応する重み。これを、site_idsに対応するように変換する
-    weights_updated = np.take(weights, site_ids, axis=1)
-
     # 重み付き比率の計算
-    ratios = calculate_ratios(weights_updated, counts, target_counts)
+    ratios = calculate_ratios(weights, counts, target_counts)
 
     ratio_mesh = ratios.reshape(lon_mesh.shape)
 
@@ -415,23 +433,18 @@ def calculate_site_ratios_fast(
     weights_updated = update_weights_matrix(weights, target_coords, df_elevation, lon_mesh, lat_mesh)
 
     # ここからtarget_period, target_originに依存する処理
-    site_ids, counts, target_counts = preprocess_data(
+    counts, target_counts = preprocess_data(
         df, target_period, target_origin
     )
-
-    weights_updated = np.take(weights_updated, site_ids, axis=1)
     
     # 比率の計算
     ratios = calculate_ratios(weights_updated, counts, target_counts)
 
     # いったんすべての結果をDataFrameに変換
-    temp_df = pl.DataFrame({
+    result_df = pl.DataFrame({
         '遺跡ID': unique_sites['遺跡ID'],
         f"比率_{target_period}_{target_origin}": ratios
     })
-    
-    # 比率が0より大きい地点のみをフィルタリング
-    result_df = temp_df.filter(pl.col(f"比率_{target_period}_{target_origin}") > 0)
     
     return result_df
 
@@ -454,6 +467,7 @@ time_period_name = {
 origin_order = ["神津島", "信州", "箱根", "高原山", "その他"]
 
 sigma = 14
+sigma_for_sites = 0.1
 
 # %%
 #calculate_obsedian_weight
@@ -486,6 +500,7 @@ for target_period in time_period_name.keys():
             lat_mesh = lat_mesh
         )
 
+        
         ratio_df = ratio_df.join(
             pl.DataFrame({
                 'x': lon_mesh.ravel(),
@@ -498,14 +513,13 @@ for target_period in time_period_name.keys():
         ratio_sites_df = ratio_sites_df.join(
             calculate_site_ratios_fast(
                 df = df_result,
-                sigma = sigma,
+                sigma = sigma_for_sites,
                 target_period = target_period,
                 target_origin = target_origin
             ),
             on="遺跡ID"
         )
 
-# %%
 df_elevation = df_elevation.join(
     ratio_df,
     on=["x", "y"]
@@ -518,5 +532,3 @@ df_sites = df_sites.join(
 # %%
 df_elevation.write_csv(os.path.join(data_dir, "12_gdf_elevation_with_ratio.csv"))
 df_sites.write_csv(os.path.join(data_dir, "12_gdf_sites_with_ratio.csv"))
-
-
