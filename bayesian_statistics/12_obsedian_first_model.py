@@ -272,8 +272,8 @@ def calculate_ratios(
         各グリッド点での重み付き比率
     """
     # 重み付き合計を計算
-    weighted_total = np.sum(weights * counts, axis=1)
-    weighted_target = np.sum(weights * target_counts, axis=1)
+    weighted_total = np.sum(weights * counts, axis=1, dtype=np.float16)
+    weighted_target = np.sum(weights * target_counts, axis=1, dtype=np.float16)
     
     # 比率計算（0除算を防ぐ）
     ratios = np.where(
@@ -283,59 +283,6 @@ def calculate_ratios(
     )
     
     return ratios
-
-# %%
-
-def plot_grid_ratios(
-    lon_mesh: np.ndarray,
-    lat_mesh: np.ndarray,
-    ratio_mesh: np.ndarray,
-    df: pl.DataFrame,
-    target_period: int,
-    target_origin: str,
-    radius_km: float,
-    figsize: tuple = (12, 8)
-) -> None:
-    """
-    グリッド点での比率を可視化（0-1の範囲に固定）
-    """
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    # グリッド点での比率をプロット（0-1の範囲に固定）
-    contour = ax.contourf(
-        lon_mesh, lat_mesh, ratio_mesh,
-        levels=np.linspace(0, 1, 21),  # 0から1までを20等分
-        cmap='Blues',
-        alpha=0.7,
-        vmin=0,  # 最小値を0に固定
-        vmax=1   # 最大値を1に固定
-    )
-    
-    # 元のデータ点も表示
-    unique_sites = df.unique(subset=['遺跡ID'])
-    ax.scatter(
-        unique_sites['経度'],
-        unique_sites['緯度'],
-        c='black',
-        alpha=0.2,
-        s=10
-    )
-    
-    # タイトルと軸ラベル
-    time_period_name = {
-        0: "早期・早々期", 1: "前期", 2: "中期", 
-        3: "後期", 4: "晩期"
-    }
-    ax.set_title(f'Obsidian Ratio Distribution (Grid-based)\n'
-              f'Period: {time_period_name[target_period]}, '
-              f'Origin: {target_origin}, Radius: {radius_km}km')
-    ax.set_xlabel('Longitude')
-    ax.set_ylabel('Latitude')
-    
-    # カラーバー（0-1の範囲に固定）
-    plt.colorbar(contour, ax=ax, label='Ratio', ticks=np.linspace(0, 1, 6))
-    
-    return fig, ax
 
 
 # %%
@@ -408,6 +355,8 @@ def calculate_obsedian_ratio(
     site_ids, counts, target_counts = preprocess_data(
         df, target_period, target_origin
     )
+
+    weights = weights.astype(np.float16)
     # まず、weightsの2次元目は遺跡IDに対応するので、weights[:, i]がi番目の遺跡に対応する重み。これを、site_idsに対応するように変換する
     weights_updated = np.take(weights, site_ids, axis=1)
 
@@ -419,42 +368,6 @@ def calculate_obsedian_ratio(
     return lon_mesh, lat_mesh, ratio_mesh
     
 
-def plot_obsidian_distribution(
-    df: pl.DataFrame,
-    df_elevation: pl.DataFrame,
-    lon_mesh: np.ndarray,
-    lat_mesh: np.ndarray,
-    ratio_mesh: np.ndarray,
-    plot_df: pl.DataFrame,
-    sigma: int,
-    target_period: int,
-    target_origin: str,
-    grid_size: int,
-    figsize: tuple = (8, 6)
-) -> None:
-    
-
-    print("plotting...")
-    # プロット
-    plot_grid_ratios(
-        lon_mesh, lat_mesh, ratio_mesh,
-        df, target_period, target_origin,
-        sigma, figsize
-    )
-    
-    plt.scatter(
-        plot_df["経度"], 
-        plot_df["緯度"], 
-        c=plot_df["比率"], 
-        cmap="Blues", 
-        edgecolors="white", 
-        linewidths=0.5,
-        vmin=0,
-        vmax=1 
-    )
-    plt.show()
-
-# %%
 def calculate_site_ratios_fast(
     df: pl.DataFrame,
     sigma: float,
