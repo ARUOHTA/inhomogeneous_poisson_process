@@ -1,37 +1,8 @@
-# %%
-import matplotlib.pyplot as plt
-import numpy as np
-from   numpy.linalg import inv
-import numpy.random as npr
-from   pypolyagamma import PyPolyaGamma
-from scipy.stats import multivariate_normal
-
-from heapq import heappush, heappop
 import os
-import matplotlib.cm as cm
-from tqdm import tqdm
-import polars as pl
-
-import geopandas as gpd
-
-from shapely.geometry import Point, Polygon
-from shapely import wkt
-
-import pandas as pd
-import statsmodels.api as sm
-import scipy
-import scipy.optimize as opt
-import seaborn as sns
-
-from pyproj import Transformer
-
-from bayesian_statistics.utils_2 import *
-import japanize_matplotlib
-
-from keplergl import KeplerGl
-
 from typing import Tuple
 
+import numpy as np
+import polars as pl
 
 # %% [markdown]
 # 地点ごとの産地構成比を計算
