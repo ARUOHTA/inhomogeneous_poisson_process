@@ -14,8 +14,8 @@ class IntensityFunction:
     def __init__(
         self, 
         design_matrix_func: Callable[[np.ndarray], np.ndarray], 
-        beta: np.ndarray,
-        lambda_star: float,
+        beta: np.ndarray = None,
+        lambda_star: float  = None,
         link_function: Callable[[np.ndarray], np.ndarray] = None
     ):
         self.design_matrix_func = design_matrix_func
@@ -201,7 +201,7 @@ def mcmc_sampler(
     prior_beta_mean: np.ndarray,
     prior_beta_cov: np.ndarray,
     prior_lambda_shape: float,
-    prior_lambda_rate: float
+    prior_lambda_rate: float, 
 ):
     """MCMC サンプラー"""
     # 初期化
@@ -342,7 +342,8 @@ def plot_intensity_posterior_2d(
     num_points: int = 100,
     credible_interval: float = 0.95,
     true_intensity_func: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    events: Optional[np.ndarray] = None
+    events: Optional[np.ndarray] = None, 
+    cmap: str = 'viridis'
 ):
     x_min, x_max = region[0]
     y_min, y_max = region[1]
@@ -370,8 +371,8 @@ def plot_intensity_posterior_2d(
     lambda_mean = np.mean(lambda_samples, axis=0).reshape(num_points, num_points)
     
     # プロット
-    plt.figure(figsize=(8, 6))
-    plt.contourf(X_grid, Y_grid, lambda_mean, levels=50, cmap="viridis", alpha=0.6)
+    plt.figure(figsize=(12, 8))
+    plt.contourf(X_grid, Y_grid, lambda_mean, levels=50, cmap=cmap, alpha=0.6)
     plt.colorbar(label='Posterior Mean of λ(x, y)')
     plt.xlabel('X')
     plt.ylabel('Y')

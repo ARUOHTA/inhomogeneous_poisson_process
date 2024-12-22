@@ -210,6 +210,6 @@ bayesian_statistics/output/*
 
 bayesPO_code
 data
-obsedian_data
+obsidian_data
 *.html
 output

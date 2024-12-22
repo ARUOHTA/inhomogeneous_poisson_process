@@ -170,9 +170,9 @@ if __name__ == "__main__":
     data_dir = "/home/ohta/dev/bayesian_statistics/data"
 
     # データの読み込み
-    df_elevation = pl.read_csv(os.path.join(data_dir, "gdf_elevation_tobler.csv"))
+    df_elevation = pl.read_csv(os.path.join(data_dir, "10_1_gdf_elevation_tobler.csv"))
     # 川のポリゴンを読み込む
-    df_river_stream = pl.read_csv(os.path.join(data_dir, "gdf_river_stream.csv"))
+    df_river_stream = pl.read_csv(os.path.join(data_dir, "9_gdf_river_stream.csv"))
 
     river_polygon = gpd.GeoSeries.from_wkt(df_river_stream.get_column("geometry").to_numpy()).union_all()
 
@@ -197,4 +197,4 @@ if __name__ == "__main__":
         print("")
 
     # 保存
-    df_elevation.write_csv("/home/ohta/dev/bayesian_statistics/data/gdf_elevation_with_costs.csv")
+    df_elevation.write_csv("/home/ohta/dev/bayesian_statistics/data/10_2_gdf_elevation_with_costs.csv")
