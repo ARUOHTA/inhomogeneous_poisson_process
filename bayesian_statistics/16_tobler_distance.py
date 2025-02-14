@@ -149,6 +149,144 @@ grid_coords = np.column_stack([
     lon_mesh.ravel() * np.pi / 180
 ])
 
+
+# 海岸線のfrictionを高くする
+# 海岸線の定義: is_seaがFalseかつ、elevation_diff_{direction}の4つのうち1~3つがNullである場合
+
+df_elevation = df_elevation.with_columns([
+    (((
+        pl.col("elevation_diff_north").is_null().cast(pl.Int64)
+        + pl.col("elevation_diff_east").is_null().cast(pl.Int64)
+        + pl.col("elevation_diff_south").is_null().cast(pl.Int64)
+        + pl.col("elevation_diff_west").is_null().cast(pl.Int64)
+    ).is_in([1, 2, 3])) & (pl.col("is_sea") == False)).alias("is_coast")
+])
+
+# 海岸沿いのfrictionを高くする
+
+# 極端に高くする場所のポリゴン一覧
+
+from shapely.geometry import Polygon
+
+izu = {"type":"伊豆半島","coordinates":[[[138.7518662555113,35.042617144097115],[138.6707917599528,34.56053181508489],[139.11491388354187,34.52700264837797],[139.2211370720799,35.07275597779107],[139.3281342140192,35.305497704601535],[139.31655815998965,35.34834874650015],[138.9909080638121,35.204024799263756],[138.86887475645986,35.080895934583104],[138.85793636642387,35.07985935793645],[138.7518662555113,35.042617144097115]]]}
+bousou = {"type":"房総半島","coordinates":[[[139.82365476349196,35.2922877248991],[139.6952824547859,34.91167841077183],[139.97838837375795,34.86098321580854],[140.16386293220444,35.07131446513346],[140.4122282892051,35.136203527893834],[140.4358783809528,35.34544112887992],[139.82365476349196,35.2922877248991]]]}
+
+izu_polygon = Polygon([[x, y] for x, y in izu["coordinates"][0]])
+bousou_polygon = Polygon([[x, y] for x, y in bousou["coordinates"][0]])
+
+# 海岸沿いは、travel_timeを、travel_time * 10倍にする
+# 伊豆半島と房総半島の海岸沿いは、travel_timeを、travel_time * 100倍にする
+
+print("converting dataframe to WKT...")
+gdf = df_elevation.to_pandas()
+gdf.geometry = gdf.geometry.apply(wkt.loads)
+gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
+gdf.crs = "EPSG:4326"
+
+# intersectionの計算
+print("calculating intersection...")
+df_elevation = df_elevation.with_columns(pl.Series(gdf.intersects(izu_polygon)).alias("intersect_izu"))
+df_elevation = df_elevation.with_columns(pl.Series(gdf.intersects(bousou_polygon)).alias("intersect_bousou"))
+
+multiple_normal = 50
+multiple_izu_bousou = 1000
+
+df_elevation = (
+    df_elevation
+    .with_columns([
+        # average
+        pl.when(
+            # 海岸沿いかつ、伊豆半島または房総半島と交差している場合
+            pl.col("is_coast") & (pl.col("intersect_izu") | pl.col("intersect_bousou"))
+        ).then(
+            pl.col("travel_time") * multiple_izu_bousou
+        ).when(
+            # 海岸沿いかつ、伊豆半島または房総半島と交差していない場合
+            pl.col("is_coast") & ((~pl.col("intersect_izu")) & (~pl.col("intersect_bousou")))
+        ).then(
+            pl.col("travel_time") * multiple_normal
+        ).otherwise(
+            pl.col("travel_time")
+        ).alias("travel_time"),
+
+        # north
+        pl.when(
+            # 海岸沿いかつ、伊豆半島または房総半島と交差している場合
+            pl.col("is_coast") & (pl.col("intersect_izu") | pl.col("intersect_bousou"))
+        ).then(
+            pl.when(pl.col("elevation_diff_north").is_null())
+            .then(pl.col("travel_time_north") * multiple_izu_bousou)
+            .otherwise(pl.col("travel_time_north"))
+        ).when(
+            # 海岸沿いかつ、伊豆半島または房総半島と交差していない場合
+            pl.col("is_coast") & ((~pl.col("intersect_izu")) & (~pl.col("intersect_bousou")))
+        ).then(
+            pl.when(pl.col("elevation_diff_north").is_null())
+            .then(pl.col("travel_time_north") * multiple_normal)
+            .otherwise(pl.col("travel_time_north")
+        )
+        ).otherwise(
+            pl.col("travel_time_north")
+        ).alias("travel_time_north"),
+
+        # south
+        pl.when(
+            pl.col("is_coast") & (pl.col("intersect_izu") | pl.col("intersect_bousou"))
+        ).then(
+            pl.when(pl.col("elevation_diff_south").is_null())
+            .then(pl.col("travel_time_south") * multiple_izu_bousou)
+            .otherwise(pl.col("travel_time_south"))
+        ).when(
+            pl.col("is_coast") & ((~pl.col("intersect_izu")) & (~pl.col("intersect_bousou")))
+        ).then(
+            pl.when(pl.col("elevation_diff_south").is_null())
+            .then(pl.col("travel_time_south") * multiple_normal)
+            .otherwise(pl.col("travel_time_south")
+        )
+        ).otherwise(
+            pl.col("travel_time_south")
+        ).alias("travel_time_south"),
+
+        # east
+        pl.when(
+            pl.col("is_coast") & (pl.col("intersect_izu") | pl.col("intersect_bousou"))
+        ).then(
+            pl.when(pl.col("elevation_diff_east").is_null())
+            .then(pl.col("travel_time_east") * multiple_izu_bousou)
+            .otherwise(pl.col("travel_time_east"))
+        ).when(
+            pl.col("is_coast") & ((~pl.col("intersect_izu")) & (~pl.col("intersect_bousou")))
+        ).then(
+            pl.when(pl.col("elevation_diff_east").is_null())
+            .then(pl.col("travel_time_east") * multiple_normal)
+            .otherwise(pl.col("travel_time_east")
+        )
+        ).otherwise(
+            pl.col("travel_time_east")
+        ).alias("travel_time_east"),
+
+        # west
+        pl.when(
+            pl.col("is_coast") & (pl.col("intersect_izu") | pl.col("intersect_bousou"))
+        ).then(
+            pl.when(pl.col("elevation_diff_west").is_null())
+            .then(pl.col("travel_time_west") * multiple_izu_bousou)
+            .otherwise(pl.col("travel_time_west"))
+        ).when(
+            pl.col("is_coast") & ((~pl.col("intersect_izu")) & (~pl.col("intersect_bousou")))
+        ).then(
+            pl.when(pl.col("elevation_diff_west").is_null())
+            .then(pl.col("travel_time_west") * multiple_normal)
+            .otherwise(pl.col("travel_time_west")
+        )
+        ).otherwise(
+            pl.col("travel_time_west")
+        ).alias("travel_time_west")
+    ])
+)
+
+
+
 # %%
 def get_site_grid_coords(df_obsidian: pl.DataFrame, df_elevation: pl.DataFrame) -> np.ndarray:
     """
@@ -221,7 +359,7 @@ from shapely.geometry import Point
 from shapely import wkt
 
 
-def process_travel_times(df, height, width, use_average_angle=False):
+def process_travel_times(df, height, width, use_average_angle):
     # 方向の定義
     directions = ["east", "west", "north", "south"]
     
@@ -248,7 +386,8 @@ def process_travel_times(df, height, width, use_average_angle=False):
             .with_columns([
                 pl.col("variable")
                 .str.replace("travel_time_", "")
-                .map_dict(dict(zip(directions, range(4))))
+                .replace(dict(zip(directions, range(4))))
+                .cast(pl.Int64)
                 .alias("direction")
             ])
         )
@@ -418,5 +557,5 @@ for i, target_grids in enumerate(tqdm(site_grid_coords)):
 
     min_costs = np.where(min_costs == np.inf, np.nan, min_costs)
 
-    with open(os.path.join(data_dir, "16_tobler_distance", f"distance_siteID_{i}"), mode='wb') as fo:
+    with open(os.path.join(data_dir, "16_tobler_distance_with_coast_50_average", f"distance_siteID_{i}"), mode='wb') as fo:
         pickle.dump(min_costs, fo)
