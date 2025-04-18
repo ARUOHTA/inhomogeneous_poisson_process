@@ -174,8 +174,8 @@ bousou = {"type":"房総半島","coordinates":[[[139.82365476349196,35.292287724
 izu_polygon = Polygon([[x, y] for x, y in izu["coordinates"][0]])
 bousou_polygon = Polygon([[x, y] for x, y in bousou["coordinates"][0]])
 
-# 海岸沿いは、travel_timeを、travel_time * 10倍にする
-# 伊豆半島と房総半島の海岸沿いは、travel_timeを、travel_time * 100倍にする
+# 海岸沿いは、travel_timeを、travel_time * multiple_normal倍にする
+# 伊豆半島と房総半島の海岸沿いは、travel_timeを、travel_time * multiple_izu_bousou倍にする
 
 print("converting dataframe to WKT...")
 gdf = df_elevation.to_pandas()
@@ -469,11 +469,8 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
 
     visited = np.full_like(min_costs, False, dtype=bool)
     queue = []
-    total_cells = width * height  # グリッド内の全セル数
     
-    # 進捗バー用のpbarを作成
-    #with tqdm(total=total_cells, desc="Processing cells") as pbar:
-        # 開始セルをキューに登録
+    # 開始セルをキューに登録
     visited_count = 0
     for i in range(len(min_costs)):
         if min_costs[i] == 0.0:
@@ -481,7 +478,6 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
             heappush(queue, (0.0, x, y))
             visited[idx(x, y)] = True
             visited_count += 1
-    #pbar.update(visited_count)
 
     while queue:
         current_cost, cx, cy = heappop(queue)
@@ -502,7 +498,6 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
             nidx = idx(nx, ny)
             if not visited[nidx]:  # 未訪問の場合のみカウント
                 visited[nidx] = True
-                #pbar.update(1)
             
             new_cost = current_cost + t
             if new_cost < min_costs[nidx]:
