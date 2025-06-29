@@ -1,21 +1,23 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import Callable, Tuple, Optional
-from pypolyagamma import PyPolyaGamma
-from tqdm import tqdm
-import matplotlib.cm as cm
 from abc import ABC, abstractmethod
+from typing import Callable
 
-def multi_pgdraw_vectorized(pg: PyPolyaGamma, B: np.ndarray, C: np.ndarray) -> np.ndarray:
+import numpy as np
+from pypolyagamma import PyPolyaGamma
+
+
+def multi_pgdraw_vectorized(
+    pg: PyPolyaGamma, B: np.ndarray, C: np.ndarray
+) -> np.ndarray:
     """multi_pgdraw のベクトル化バージョン"""
     return np.array([pg.pgdraw(b, c) for b, c in zip(B, C)])
+
 
 # 抽象クラスの定義
 class DesignMatrix(ABC):
     @abstractmethod
     def create(self, x: np.ndarray) -> np.ndarray:
         pass
+
 
 # 多項式設計行列クラス
 class PolynomialDesignMatrix(DesignMatrix):
@@ -42,6 +44,7 @@ class PolynomialDesignMatrix(DesignMatrix):
 
         return np.column_stack(terms)
 
+
 # サイン・コサイン設計行列クラス
 class TrigonometricDesignMatrix(DesignMatrix):
     def __init__(self, omega: float = np.pi / 5):
@@ -60,6 +63,7 @@ class TrigonometricDesignMatrix(DesignMatrix):
 
         return np.column_stack(terms)
 
+
 # 複合設計行列クラス
 class CompositeDesignMatrix(DesignMatrix):
     def __init__(self, design_matrices: list):
@@ -75,14 +79,15 @@ class CompositeDesignMatrix(DesignMatrix):
             terms.append(dm_terms)
         return np.column_stack(terms)
 
+
 # IntensityFunction クラスの修正
 class IntensityFunction:
     def __init__(
-        self, 
-        design_matrix: DesignMatrix, 
+        self,
+        design_matrix: DesignMatrix,
         beta: np.ndarray,
         lambda_star: float,
-        link_function: Callable[[np.ndarray], np.ndarray] = None
+        link_function: Callable[[np.ndarray], np.ndarray] = None,
     ):
         self.design_matrix = design_matrix
         self.beta = beta
@@ -98,7 +103,7 @@ class IntensityFunction:
             design_matrix=self.design_matrix,
             beta=self.beta.copy(),
             lambda_star=self.lambda_star,
-            link_function=self.link_function
+            link_function=self.link_function,
         )
 
     def q(self, x: np.ndarray) -> np.ndarray:
@@ -117,7 +122,9 @@ class IntensityFunction:
     def update_lambda_star(self, lambda_star: float):
         self.lambda_star = lambda_star
 
+
 # イベント生成関数などは変更なし
+
 
 # テストコード
 def test_design_matrix():
@@ -147,14 +154,19 @@ def test_design_matrix():
     W_2d_composite = composite_dm.create(x_2d)
 
     # 1次元の場合の特徴量数を計算
-    num_features_1d = W_1d_poly.shape[1] + W_1d_trig.shape[1] - 1  # バイアス項の重複を避ける
+    num_features_1d = (
+        W_1d_poly.shape[1] + W_1d_trig.shape[1] - 1
+    )  # バイアス項の重複を避ける
     assert W_1d_composite.shape == (5, num_features_1d)
 
     # 2次元の場合の特徴量数を計算
-    num_features_2d = W_2d_poly.shape[1] + W_2d_trig.shape[1] - 1  # バイアス項の重複を避ける
+    num_features_2d = (
+        W_2d_poly.shape[1] + W_2d_trig.shape[1] - 1
+    )  # バイアス項の重複を避ける
     assert W_2d_composite.shape == (25, num_features_2d)
 
     print("All tests passed for design matrices.")
+
 
 # テストの実行
 test_design_matrix()

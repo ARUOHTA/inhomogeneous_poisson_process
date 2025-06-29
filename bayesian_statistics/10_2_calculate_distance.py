@@ -1,15 +1,17 @@
-import numpy as np
 import os
-import polars as pl
-import geopandas as gpd
+from heapq import heappop, heappush
 
-from heapq import heappush, heappop
+import geopandas as gpd
+import numpy as np
+import polars as pl
+from shapely import wkt
+from shapely.geometry import Point
 from tqdm import tqdm
 
-from shapely.geometry import Point
-from shapely import wkt
 
-def prepare_data_for_dijkstra(df: pl.DataFrame, target_geometry, use_average_angle=False):
+def prepare_data_for_dijkstra(
+    df: pl.DataFrame, target_geometry, use_average_angle=False
+):
     """
     dfは以下の列を持つと仮定:
     - grid_x: int
@@ -34,7 +36,7 @@ def prepare_data_for_dijkstra(df: pl.DataFrame, target_geometry, use_average_ang
     def idx(x, y):
         return y * width + x
 
-    n_cells = (width * height)
+    n_cells = width * height
 
     # min_costs用に∞で初期化
     # float64で良い
@@ -42,8 +44,8 @@ def prepare_data_for_dijkstra(df: pl.DataFrame, target_geometry, use_average_ang
 
     # travel_timeをまとめる
     # 方向は0:east,1:west,2:north,3:southとする
-    directions = [("east",1,0), ("west",-1,0), ("north",0,1), ("south",0,-1)]
-    dir_map = {"east":0, "west":1, "north":2, "south":3}
+    directions = [("east", 1, 0), ("west", -1, 0), ("north", 0, 1), ("south", 0, -1)]
+    dir_map = {"east": 0, "west": 1, "north": 2, "south": 3}
 
     travel_times = np.full((4, height, width), np.nan, dtype=np.float64)
 
@@ -55,7 +57,11 @@ def prepare_data_for_dijkstra(df: pl.DataFrame, target_geometry, use_average_ang
         # 各方向のtravel_timeをセット
         for d in directions:
             dname = d[0]
-            val = row[f"travel_time_{dname}"] if not use_average_angle else row[f"travel_time"]
+            val = (
+                row[f"travel_time_{dname}"]
+                if not use_average_angle
+                else row["travel_time"]
+            )
             if not np.isnan(val):
                 travel_times[dir_map[dname], gy, gx] = val
 
@@ -65,7 +71,7 @@ def prepare_data_for_dijkstra(df: pl.DataFrame, target_geometry, use_average_ang
     gdf.geometry = gdf.geometry.apply(wkt.loads)
     gdf = gpd.GeoDataFrame(gdf, geometry="geometry")
     gdf.crs = "EPSG:4326"
-    
+
     # intersectionの計算
     print("calculating intersection...")
     df = df.with_columns(pl.Series(gdf.intersects(target_geometry)).alias("intersect"))
@@ -93,7 +99,7 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
     visited = np.full_like(min_costs, False, dtype=bool)
     queue = []
     total_cells = width * height  # グリッド内の全セル数
-    
+
     # 進捗バー用のpbarを作成
     with tqdm(total=total_cells, desc="Processing cells") as pbar:
         # 開始セルをキューに登録
@@ -126,7 +132,7 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
                 if not visited[nidx]:  # 未訪問の場合のみカウント
                     visited[nidx] = True
                     pbar.update(1)
-                
+
                 new_cost = current_cost + t
                 if new_cost < min_costs[nidx]:
                     min_costs[nidx] = new_cost
@@ -134,39 +140,36 @@ def run_dijkstra(min_costs, travel_times, width, height, directions):
 
     return min_costs
 
+
 # 2つをまとめて実行する関数
-def calculate_minimum_cost_to_geometry(df, target_geometry, geometry_name="", use_average_angle=False):
-    
-    min_costs, travel_times, width, height, starting_indices, directions = prepare_data_for_dijkstra(
-        df, 
-        target_geometry, 
-        use_average_angle=use_average_angle
+def calculate_minimum_cost_to_geometry(
+    df, target_geometry, geometry_name="", use_average_angle=False
+):
+    min_costs, travel_times, width, height, starting_indices, directions = (
+        prepare_data_for_dijkstra(
+            df, target_geometry, use_average_angle=use_average_angle
+        )
     )
 
     print(f"number of starting cells: {len(starting_indices)}")
 
-    min_costs = run_dijkstra(
-        min_costs, 
-        travel_times, 
-        width, 
-        height, 
-        directions
-    )
+    min_costs = run_dijkstra(min_costs, travel_times, width, height, directions)
 
     min_costs = np.where(min_costs == np.inf, np.nan, min_costs)
 
     # grid_x, grid_y, min_cost_minutsという列を持つpl.DataFrameを作成
-    min_costs_df = pl.DataFrame({
-        "grid_x": np.tile(np.arange(width), height),
-        "grid_y": np.repeat(np.arange(height), width),
-        f"cost_{geometry_name}": min_costs
-    })
+    min_costs_df = pl.DataFrame(
+        {
+            "grid_x": np.tile(np.arange(width), height),
+            "grid_y": np.repeat(np.arange(height), width),
+            f"cost_{geometry_name}": min_costs,
+        }
+    )
 
     return min_costs_df
 
 
 if __name__ == "__main__":
-
     data_dir = "/home/ohta/dev/bayesian_statistics/data"
 
     # データの読み込み
@@ -174,27 +177,30 @@ if __name__ == "__main__":
     # 川のポリゴンを読み込む
     df_river_stream = pl.read_csv(os.path.join(data_dir, "9_gdf_river_stream.csv"))
 
-    river_polygon = gpd.GeoSeries.from_wkt(df_river_stream.get_column("geometry").to_numpy()).union_all()
+    river_polygon = gpd.GeoSeries.from_wkt(
+        df_river_stream.get_column("geometry").to_numpy()
+    ).union_all()
 
     polygon_dict = {
-        "kouzu":    Point(139.1517940530124, 34.214991203764754),
-        "shinshu":  Point(138.1431305514158, 36.14658805493071),
-        "hakone":   Point(139.0446125901514, 35.221867157762105),
+        "kouzu": Point(139.1517940530124, 34.214991203764754),
+        "shinshu": Point(138.1431305514158, 36.14658805493071),
+        "hakone": Point(139.0446125901514, 35.221867157762105),
         "takahara": Point(139.7766240432928, 36.900342242149065),
-        "river": river_polygon
+        "river": river_polygon,
     }
 
     for key, value in polygon_dict.items():
         print(f"calculating distance to {key}...")
         min_costs_df = calculate_minimum_cost_to_geometry(
-            df_elevation, 
-            value, 
-            geometry_name=key, 
-            use_average_angle=True
+            df_elevation, value, geometry_name=key, use_average_angle=True
         )
-        df_elevation = df_elevation.join(min_costs_df, on=["grid_x", "grid_y"], how="left")
-        print(f"done.")
+        df_elevation = df_elevation.join(
+            min_costs_df, on=["grid_x", "grid_y"], how="left"
+        )
+        print("done.")
         print("")
 
     # 保存
-    df_elevation.write_csv("/home/ohta/dev/bayesian_statistics/data/10_2_gdf_elevation_with_costs.csv")
+    df_elevation.write_csv(
+        "/home/ohta/dev/bayesian_statistics/data/10_2_gdf_elevation_with_costs.csv"
+    )

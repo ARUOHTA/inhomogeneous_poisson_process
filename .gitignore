@@ -213,3 +213,4 @@ data
 obsidian_data
 *.html
 output
+*.csv
