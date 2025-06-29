@@ -88,15 +88,12 @@ class ObsidianDataPreprocessor:
             os.path.join(self.data_dir, "11_gdf_elevation.csv"),
             null_values=["nan"],  # "nan"をnullとして扱う
         )
-        self._df_elevation = (
-            self._df_elevation.cast(self.SCHEMA)
-            .with_columns(
-                [
-                    pl.all_horizontal(
-                        [~pl.col(col).is_null() for col in self._df_elevation.columns]
-                    ).alias("is_valid")
-                ]
-            )
+        self._df_elevation = self._df_elevation.cast(self.SCHEMA).with_columns(
+            [
+                pl.all_horizontal(
+                    [~pl.col(col).is_null() for col in self._df_elevation.columns]
+                ).alias("is_valid")
+            ]
         )
 
         # 黒曜石データの読み込み
@@ -123,7 +120,9 @@ class ObsidianDataPreprocessor:
             "sites": self._df_sites,
         }
 
-    def convert_to_grid_coords(self, df_obsidian: Optional[pl.DataFrame] = None) -> np.ndarray:
+    def convert_to_grid_coords(
+        self, df_obsidian: Optional[pl.DataFrame] = None
+    ) -> np.ndarray:
         """
         遺跡の座標をグリッド座標に変換
 
@@ -139,9 +138,11 @@ class ObsidianDataPreprocessor:
         """
         if df_obsidian is None:
             df_obsidian = self._df_obsidian
-        
+
         if self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         x_spacing = self._df_elevation["x"].unique().sort().diff().mode()[0]
         y_spacing = self._df_elevation["y"].unique().sort().diff().mode()[0]
@@ -170,7 +171,9 @@ class ObsidianDataPreprocessor:
 
         return site_grid_coords
 
-    def load_tobler_distances(self, distance_dir: str = "16_tobler_distance_with_coast_50_average") -> np.ndarray:
+    def load_tobler_distances(
+        self, distance_dir: str = "16_tobler_distance_with_coast_50_average"
+    ) -> np.ndarray:
         """
         Tobler距離を読み込む
 
@@ -185,7 +188,9 @@ class ObsidianDataPreprocessor:
             距離行列 (グリッド数, 遺跡数)
         """
         if self._df_obsidian is None or self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         # グリッド座標を取得
         site_coords = self.create_site_coords()
@@ -222,7 +227,9 @@ class ObsidianDataPreprocessor:
             遺跡の説明変数 (遺跡数, p)
         """
         if self._df_elevation is None or self._df_sites is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         # グリッドの説明変数
         W_grids = (
@@ -252,7 +259,9 @@ class ObsidianDataPreprocessor:
             グリッド情報の辞書
         """
         if self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         if self._grid_info is not None:
             return self._grid_info
@@ -292,7 +301,9 @@ class ObsidianDataPreprocessor:
             陸地マスク（Trueが陸地）
         """
         if self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         grid_coords = self.create_grid_coords()
         lon_mesh, lat_mesh = self.create_meshgrid()
@@ -361,7 +372,9 @@ class ObsidianDataPreprocessor:
             対象産地の出土数
         """
         if self._df_obsidian is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         # 全遺跡IDのリストを取得
         max_site_id = self._df_obsidian["遺跡ID"].max()
@@ -410,7 +423,9 @@ class ObsidianDataPreprocessor:
             遺跡の座標（ラジアン）
         """
         if self._df_obsidian is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         # 座標をラジアンに変換
         coords = (
@@ -442,12 +457,12 @@ class ObsidianDataPreprocessor:
             グリッドの座標（ラジアン）
         """
         lon_mesh, lat_mesh = self.create_meshgrid()
-        
+
         # グリッドの位置座標: (グリッド数, 2)
         grid_coords = np.column_stack(
             [lat_mesh.ravel() * np.pi / 180, lon_mesh.ravel() * np.pi / 180]
         )
-        
+
         return grid_coords
 
     def create_meshgrid(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -462,7 +477,9 @@ class ObsidianDataPreprocessor:
             緯度メッシュ
         """
         if self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
 
         # メッシュグリッドを作成
         lon_mesh, lat_mesh = np.meshgrid(
@@ -476,19 +493,25 @@ class ObsidianDataPreprocessor:
     def df_elevation(self) -> pl.DataFrame:
         """標高データフレーム"""
         if self._df_elevation is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
         return self._df_elevation
 
     @property
     def df_obsidian(self) -> pl.DataFrame:
         """黒曜石データフレーム"""
         if self._df_obsidian is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
         return self._df_obsidian
 
     @property
     def df_sites(self) -> pl.DataFrame:
         """遺跡データフレーム"""
         if self._df_sites is None:
-            raise ValueError("データが読み込まれていません。load_data()を先に実行してください。")
+            raise ValueError(
+                "データが読み込まれていません。load_data()を先に実行してください。"
+            )
         return self._df_sites

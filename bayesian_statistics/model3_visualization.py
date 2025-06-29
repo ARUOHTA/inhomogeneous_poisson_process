@@ -433,7 +433,7 @@ class ObsidianVisualizer:
                     origin,
                     time_period_names,
                 )
-                
+
                 if save_dir is not None:
                     filename = f"ratio_{period}_{origin}.png"
                     fig.savefig(f"{save_dir}/{filename}", dpi=300, bbox_inches="tight")

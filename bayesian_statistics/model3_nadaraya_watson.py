@@ -125,7 +125,7 @@ class NadarayaWatsonEstimator:
         weighted_target = np.sum(weights * target_counts, axis=1)
 
         # 比率計算（0除算を防ぐ）
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             ratios = np.where(weighted_total > 0, weighted_target / weighted_total, 0)
 
         return ratios
@@ -176,7 +176,9 @@ class NadarayaWatsonEstimator:
 
         return grid_is_land
 
-    def fit(self, preprocessor: ObsidianDataPreprocessor, variable_names: list) -> Dict[str, np.ndarray]:
+    def fit(
+        self, preprocessor: ObsidianDataPreprocessor, variable_names: list
+    ) -> Dict[str, np.ndarray]:
         """
         モデルを学習
 
@@ -193,45 +195,51 @@ class NadarayaWatsonEstimator:
             計算された重み行列
         """
         print("creating weights matrix...")
-        
+
         # 説明変数の作成
         W_grids, W_sites = preprocessor.create_explanatory_variables(variable_names)
-        
+
         # 距離行列の読み込み
         distances = preprocessor.load_tobler_distances()
-        
+
         # 重み行列の計算
         self._weights = self.calculate_kernel_weights(distances, self.sigma)
-        
+
         # 説明変数間の距離行列の計算
         print("calculating distance_W...")
         distance_W = self.calculate_distance_W(W_grids, W_sites)
         weights_W = self.K(distance_W, self.sigma).prod(axis=2)
-        
+
         self._weights *= weights_W
-        
+
         print("updating weights matrix...")
-        
+
         # 陸地マスクの適用
         grid_coords = preprocessor.create_grid_coords()
         lon_mesh, lat_mesh = preprocessor.create_meshgrid()
-        grid_is_land = self._create_land_mask_original(grid_coords, preprocessor.df_elevation, lon_mesh, lat_mesh)
-        
+        grid_is_land = self._create_land_mask_original(
+            grid_coords, preprocessor.df_elevation, lon_mesh, lat_mesh
+        )
+
         # 海上の点からの重みをすべて0に
         self._weights *= grid_is_land[:, np.newaxis]
-        
+
         # 遺跡間の重み計算
         site_grid_coords = preprocessor.convert_to_grid_coords()
         grid_info = preprocessor.create_grid_info()
         width = grid_info["n_grid_x"]
-        
+
         def idx(x, y):
             return y * width + x
-        
-        site_grid_idx = np.vectorize(idx)(site_grid_coords[:, 0], site_grid_coords[:, 1])
+
+        site_grid_idx = np.vectorize(idx)(
+            site_grid_coords[:, 0], site_grid_coords[:, 1]
+        )
         distances_sites = distances[site_grid_idx]
-        self._weights_sites = self.calculate_kernel_weights(distances_sites, self.sigma_for_sites)
-        
+        self._weights_sites = self.calculate_kernel_weights(
+            distances_sites, self.sigma_for_sites
+        )
+
         return {"weights": self._weights, "weights_sites": self._weights_sites}
 
     def predict_single(
@@ -258,26 +266,28 @@ class NadarayaWatsonEstimator:
             グリッド上の比率と遺跡での比率
         """
         if self._weights is None or self._weights_sites is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
+
         # データの前処理
         counts, target_counts = preprocessor.preprocess_obsidian_data(
             target_period, target_origin
         )
-        
+
         # メッシュグリッドの形状を取得
         lon_mesh, lat_mesh = preprocessor.create_meshgrid()
-        
+
         # グリッド上の比率計算
         ratio_mesh = self.calculate_weighted_ratios(
             self._weights, counts, target_counts
         ).reshape(lon_mesh.shape)
-        
+
         # 遺跡での比率計算
         ratio_sites = self.calculate_weighted_ratios(
             self._weights_sites, counts, target_counts
         )
-        
+
         return {
             "ratio_mesh": ratio_mesh,
             "ratio_sites": ratio_sites,
@@ -309,61 +319,73 @@ class NadarayaWatsonEstimator:
             遺跡での比率データフレーム
         """
         if self._weights is None or self._weights_sites is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
+
         # メッシュグリッドの作成
         lon_mesh, lat_mesh = preprocessor.create_meshgrid()
-        
+
         # 初期データフレーム
         ratio_df = pl.DataFrame({"x": lon_mesh.ravel(), "y": lat_mesh.ravel()})
-        
+
         # 遺跡の一意なIDを取得
         unique_sites = preprocessor.df_obsidian.unique(subset=["遺跡ID"]).sort("遺跡ID")
         ratio_sites_df = pl.DataFrame({"遺跡ID": unique_sites["遺跡ID"]})
-        
+
         # 全時期・全産地について計算
         for target_period in tqdm(time_period_names.keys(), desc="時期"):
             for target_origin in origin_order[:-1]:  # "その他"を除外
                 print(f"target_period: {target_period}, target_origin: {target_origin}")
-                
+
                 # 予測実行
-                results = self.predict_single(preprocessor, target_period, target_origin)
-                
+                results = self.predict_single(
+                    preprocessor, target_period, target_origin
+                )
+
                 # グリッドデータの追加
                 ratio_df = ratio_df.join(
                     pl.DataFrame(
                         {
                             "x": lon_mesh.ravel(),
                             "y": lat_mesh.ravel(),
-                            f"ratio_{target_period}_{target_origin}": results["ratio_mesh"].ravel(),
+                            f"ratio_{target_period}_{target_origin}": results[
+                                "ratio_mesh"
+                            ].ravel(),
                         }
                     ),
                     on=["x", "y"],
                 )
-                
+
                 # 遺跡データの追加
                 ratio_sites_df = ratio_sites_df.join(
                     pl.DataFrame(
                         {
                             "遺跡ID": unique_sites["遺跡ID"],
-                            f"比率_{target_period}_{target_origin}": results["ratio_sites"],
+                            f"比率_{target_period}_{target_origin}": results[
+                                "ratio_sites"
+                            ],
                         }
                     ),
                     on="遺跡ID",
                 )
-        
+
         return ratio_df, ratio_sites_df
 
     @property
     def weights(self) -> np.ndarray:
         """重み行列"""
         if self._weights is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
         return self._weights
 
     @property
     def weights_sites(self) -> np.ndarray:
         """遺跡間の重み行列"""
         if self._weights_sites is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
         return self._weights_sites

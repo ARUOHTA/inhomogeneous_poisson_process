@@ -16,31 +16,31 @@ from .model3_preprocessing import ObsidianDataPreprocessor
 
 class IntensityFunction:
     """強度関数を管理するクラス"""
-    
+
     def __init__(self, design_matrix_func, beta: np.ndarray, lambda_star: float):
         self.design_matrix_func = design_matrix_func
         self.beta = beta
         self.lambda_star = lambda_star
-    
+
     def q(self, x: np.ndarray) -> np.ndarray:
         """q(x) を計算"""
         X = self.design_matrix_func(x)
         eta = X @ self.beta
         return self.link_function(eta)
-    
+
     @staticmethod
     def link_function(eta: np.ndarray) -> np.ndarray:
         """ロジスティックリンク関数"""
         return 1 / (1 + np.exp(-eta))
-    
+
     def update_beta(self, beta: np.ndarray):
         """β パラメータを更新"""
         self.beta = beta
-    
+
     def update_lambda_star(self, lambda_star: float):
         """λ* パラメータを更新"""
         self.lambda_star = lambda_star
-    
+
     def copy(self):
         """コピーを作成"""
         return IntensityFunction(
@@ -83,26 +83,30 @@ class InhomogeneousPoissonProcess:
             デザイン行列（(N, p+1)）
         """
         if self._W_grids is None or self._preprocessor is None:
-            raise ValueError("モデルが初期化されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが初期化されていません。fit()を先に実行してください。"
+            )
+
         index = self._convert_to_grid_indices(xy)
-        
+
         # 切片を追加してデザイン行列を作成
         return np.column_stack([np.ones(len(index)), self._W_grids[index]])
 
     def _convert_to_grid_indices(self, points: np.ndarray) -> np.ndarray:
         """座標をグリッドのインデックスに変換"""
         if self._preprocessor is None:
-            raise ValueError("モデルが初期化されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが初期化されていません。fit()を先に実行してください。"
+            )
+
         grid_info = self._preprocessor.create_grid_info()
         x, y = points[:, 0], points[:, 1]
-        
+
         index_list = self._get_grid_xy(x, y, grid_info)
-        
+
         x_index = index_list[:, 0]
         y_index = index_list[:, 1]
-        
+
         return y_index * grid_info["n_grid_x"] + x_index
 
     @staticmethod
@@ -178,7 +182,9 @@ class InhomogeneousPoissonProcess:
             # バッチサイズは残りの必要数
             batch_size = N - len(candidate_points)
             # 一様サンプリング
-            candidates = np.random.uniform(mins, maxs, size=(batch_size, len(self.region)))
+            candidates = np.random.uniform(
+                mins, maxs, size=(batch_size, len(self.region))
+            )
 
             # グリッドインデックスに変換してvalidかチェック
             grid_indices = self._convert_to_grid_indices(candidates)
@@ -308,10 +314,12 @@ class InhomogeneousPoissonProcess:
             MCMCサンプルの辞書
         """
         self._preprocessor = preprocessor
-        
+
         # 説明変数の取得
-        self._W_grids, _ = preprocessor.create_explanatory_variables(self.variable_names)
-        
+        self._W_grids, _ = preprocessor.create_explanatory_variables(
+            self.variable_names
+        )
+
         # 有効グリッドの取得
         valid_grids = (
             preprocessor.df_elevation.sort(["y", "x"])
@@ -319,32 +327,34 @@ class InhomogeneousPoissonProcess:
             .to_numpy()
             .astype(bool)
         )
-        
+
         # 面積を計算
         volume = np.prod(
             [self.region[i][1] - self.region[i][0] for i in range(len(self.region))]
         ) * np.mean(valid_grids)
-        
+
         # 観測データの準備
         n = preprocessor.df_sites.shape[0]
-        X_obs = preprocessor.df_sites.select(["経度", "緯度"]).to_numpy().astype(np.float64)
+        X_obs = (
+            preprocessor.df_sites.select(["経度", "緯度"]).to_numpy().astype(np.float64)
+        )
         y_obs = np.ones(n)
-        
+
         # 事前分布の設定
         p = len(self.variable_names) + 1
         prior_beta_mean = np.zeros(p)
         prior_beta_cov = np.eye(p) * 10
         prior_lambda_shape = 2.0
         prior_lambda_rate = 1.0
-        
+
         # 初期値の設定
         beta_init = np.zeros(p)
         lambda_star_init = 30
-        
+
         self._intensity_func = IntensityFunction(
             self.create_design_matrix, beta_init, lambda_star_init
         )
-        
+
         # MCMC の実行
         beta_samples, lambda_star_samples = self.mcmc_sampler(
             intensity_func=self._intensity_func,
@@ -358,15 +368,15 @@ class InhomogeneousPoissonProcess:
             prior_lambda_shape=prior_lambda_shape,
             prior_lambda_rate=prior_lambda_rate,
         )
-        
+
         # バーンイン
         self._beta_samples = np.array(beta_samples)[burn_in:, :]
         self._lambda_star_samples = np.array(lambda_star_samples)[burn_in:]
-        
+
         # 平均値で強度関数を更新
         self._intensity_func.update_beta(self._beta_samples.mean(axis=0))
         self._intensity_func.update_lambda_star(self._lambda_star_samples.mean())
-        
+
         return {
             "beta_samples": self._beta_samples,
             "lambda_star_samples": self._lambda_star_samples,
@@ -387,12 +397,14 @@ class InhomogeneousPoissonProcess:
             存在確率
         """
         if self._intensity_func is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
+
         # grid_coords は (N, 2) でラジアン単位なので、度に変換
         X_grids = grid_coords / np.pi * 180
         X_grids = X_grids[:, [1, 0]]  # (lat, lon) -> (lon, lat)
-        
+
         return self._intensity_func.q(X_grids)
 
     def create_inference_data(self) -> az.InferenceData:
@@ -405,44 +417,52 @@ class InhomogeneousPoissonProcess:
             推論データ
         """
         if self._beta_samples is None or self._lambda_star_samples is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
-        
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
+
         # サンプル数とパラメータ数の取得
         num_samples, num_beta = self._beta_samples.shape
-        
+
         # パラメータ名とサンプルの辞書を作成
         posterior_samples = {}
-        
+
         # βの各成分を辞書に追加
         for i in range(num_beta):
             param_name = f"beta_{i}"
             posterior_samples[param_name] = self._beta_samples[:, i]
-        
+
         # λ*を辞書に追加
         posterior_samples["lambda_star"] = self._lambda_star_samples
-        
+
         # InferenceDataオブジェクトを作成
         idata = az.from_dict(posterior=posterior_samples)
-        
+
         return idata
 
     @property
     def beta_samples(self) -> np.ndarray:
         """βのMCMCサンプル"""
         if self._beta_samples is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
         return self._beta_samples
 
     @property
     def lambda_star_samples(self) -> np.ndarray:
         """λ*のMCMCサンプル"""
         if self._lambda_star_samples is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
         return self._lambda_star_samples
 
     @property
     def intensity_func(self) -> IntensityFunction:
         """強度関数"""
         if self._intensity_func is None:
-            raise ValueError("モデルが学習されていません。fit()を先に実行してください。")
+            raise ValueError(
+                "モデルが学習されていません。fit()を先に実行してください。"
+            )
         return self._intensity_func

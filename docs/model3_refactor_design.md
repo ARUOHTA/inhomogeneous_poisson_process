@@ -115,29 +115,29 @@ class ObsidianVisualizer:
 class Model3Config:
     # データパス
     data_dir: str
-    
+
     # グリッド設定
     x_min: float = 138
     x_max: float = 141
     y_min: float = 34
     y_max: float = 37
-    
+
     # NW推定設定
     nw_sigma: float = 500
     nw_sigma_for_sites: float = 0.1
-    
+
     # IPP設定
     mcmc_iterations: int = 30000
     burn_in: int = 5000
-    
+
     # 説明変数
     variable_names: List[str] = field(default_factory=lambda: [
         "average_elevation",
-        "average_slope_angle", 
+        "average_slope_angle",
         "cost_shinshu",
         "cost_river"
     ])
-    
+
     # 時期・産地設定
     time_periods: Dict[int, str] = field(default_factory=lambda: {
         0: "早期・早々期", 1: "前期", 2: "中期", 3: "後期", 4: "晩期"
@@ -204,7 +204,7 @@ pipeline.save_results("output/")
 
 #### 8.1 段階的移行
 1. 前処理部分のクラス化
-2. NW推定部分のクラス化  
+2. NW推定部分のクラス化
 3. IPP推定部分のクラス化
 4. 可視化部分の整理
 5. 統合とテスト

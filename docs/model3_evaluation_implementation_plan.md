@@ -108,11 +108,11 @@ evaluation_results = {
 def aitchison_distance(x: np.ndarray, y: np.ndarray, zero_replacement: float = 1e-6) -> float:
     """
     Aitchison距離の計算
-    
+
     Parameters:
     - x, y: 産地構成比ベクトル（sum = 1）
     - zero_replacement: 0値の置換値
-    
+
     Returns:
     - aitchison_distance: float
     """
@@ -123,7 +123,7 @@ def aitchison_distance(x: np.ndarray, y: np.ndarray, zero_replacement: float = 1
 def total_variation(x: np.ndarray, y: np.ndarray, zero_replacement: float = 1e-6) -> float:
     """
     Total Variationの計算
-    
+
     Formula: 1/(2D) * sum_i sum_j (ln(x_i/x_j) - ln(y_i/y_j))^2
     """
 ```
@@ -136,13 +136,13 @@ class LOOCVEvaluator:
     def __init__(self, preprocessor, config):
         self.preprocessor = preprocessor
         self.config = config
-    
+
     def run_single_trial(self, period: int, test_site_id: int) -> dict:
         """単一のLOOCV試行を実行"""
-    
+
     def run_period_evaluation(self, period: int, n_trials: int = 100) -> dict:
         """特定時期の全体評価を実行"""
-    
+
     def run_all_periods_evaluation(self, n_trials: int = 100) -> dict:
         """全時期の評価を実行"""
 ```
@@ -154,7 +154,7 @@ class LOOCVEvaluator:
 def retrain_nw_estimator(preprocessor, excluded_site_ids: List[int], config) -> NadarayaWatsonEstimator:
     """
     指定された遺跡を除外してNW推定量を再学習
-    
+
     Steps:
     1. 除外遺跡のデータをマスク
     2. 重み行列の再計算

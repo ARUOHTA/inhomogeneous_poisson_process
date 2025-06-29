@@ -96,44 +96,44 @@ model3では2つの主要な推定問題があります：
 def loocv_evaluation(sites_data, n_trials=100):
     """
     Leave-One-Out Cross Validationによる評価
-    
+
     Parameters
     ----------
     sites_data : データ構造
         全遺跡のデータ
     n_trials : int
         試行回数（デフォルト100回）
-    
+
     Returns
     -------
     evaluation_results : dict
         各評価指標の平均値と標準偏差
     """
     results = []
-    
+
     for trial in range(n_trials):
         # ランダムに1つ（または数個）の遺跡を選択
         test_site_ids = random.sample(site_ids, k=1)  # または k=2-3
         train_site_ids = [id for id in site_ids if id not in test_site_ids]
-        
+
         # 訓練データでNW推定量を学習
         nw_estimator = fit_nadaraya_watson(train_site_ids)
-        
+
         # テスト遺跡で予測
         predicted_ratios = nw_estimator.predict(test_site_ids)
         observed_ratios = get_observed_ratios(test_site_ids)
-        
+
         # Compositional data評価指標で評価
         aitchison_dist = calculate_aitchison_distance(predicted_ratios, observed_ratios)
         total_variation = calculate_total_variation(predicted_ratios, observed_ratios)
-        
+
         results.append({
             'aitchison_distance': aitchison_dist,
             'total_variation': total_variation,
             'trial_id': trial,
             'test_sites': test_site_ids
         })
-    
+
     return aggregate_results(results)
 ```
 
@@ -263,7 +263,7 @@ bayesian_statistics/
 
 ### 6.2 LOOCVの前提と限界
 - **独立性の仮定**: 遺跡間の空間的相関の無視
-- **サンプルサイズ**: 小規模データでの評価精度の限界  
+- **サンプルサイズ**: 小規模データでの評価精度の限界
 - **計算コスト**: 試行回数と計算時間のバランス
 - **代表性**: 除外遺跡の選択バイアス
 
