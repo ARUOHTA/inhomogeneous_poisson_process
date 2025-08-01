@@ -207,6 +207,8 @@ pip-selfcheck.json
 # End of https://www.toptal.com/developers/gitignore/api/python,venv,visualstudiocode
 
 bayesian_statistics/output/*
+docs/banerjee_carlin_gelfand/*
+
 
 bayesPO_code
 data

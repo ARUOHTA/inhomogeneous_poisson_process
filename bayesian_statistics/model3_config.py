@@ -8,7 +8,10 @@ from typing import Any, Dict, List, Optional
 
 import polars as pl
 
+from .model3_bayes_nw import BayesianNadarayaWatson
+from .model3_bayesian_spatial import BayesianSpatialMultinomialModel
 from .model3_ipp import InhomogeneousPoissonProcess
+from .model3_ksbp import KSBPModel
 from .model3_nadaraya_watson import NadarayaWatsonEstimator
 from .model3_preprocessing import ObsidianDataPreprocessor
 
@@ -33,6 +36,25 @@ class Model3Config:
     # IPP設定
     mcmc_iterations: int = 30000
     burn_in: int = 5000
+
+    # KSBP設定
+    ksbp_kappa_coords: float = 0.002
+    ksbp_kappa_costs: float = 2.0
+    ksbp_kappa_elevation: float = 10000.0
+    ksbp_kappa_angle: float = 3.0
+    ksbp_kappa_river: float = 2.0
+    ksbp_gamma: float = 0.1
+    ksbp_alpha0: float = 0.1
+    ksbp_j_max: int = 80
+    ksbp_n_iter: int = 2000
+    ksbp_burnin: int = 100
+    ksbp_seed: int = 0
+
+    # ベイズ空間多項回帰設定
+    bayesian_spatial_prior_sigma: float = 0.5
+    bayesian_spatial_n_draws: int = 1000
+    bayesian_spatial_n_tune: int = 500
+    bayesian_spatial_seed: int = 42
 
     # 説明変数（NW推定用）
     nw_variable_names: List[str] = field(
@@ -87,6 +109,8 @@ class Model3Pipeline:
         self._preprocessor: Optional[ObsidianDataPreprocessor] = None
         self._nw_estimator: Optional[NadarayaWatsonEstimator] = None
         self._ipp_model: Optional[InhomogeneousPoissonProcess] = None
+        self._ksbp_model: Optional[KSBPModel] = None
+        self._bayesian_spatial_model: Optional[BayesianSpatialMultinomialModel] = None
         self._results: Dict[str, Any] = {}
 
     def run_preprocessing(self) -> ObsidianDataPreprocessor:
@@ -169,6 +193,104 @@ class Model3Pipeline:
 
         return self._nw_estimator
 
+    def run_nadaraya_watson_bayes(
+        self,
+        preprocessor: Optional[ObsidianDataPreprocessor] = None,
+        alpha_0: float = 10000,
+        gamma_0: float = 1.0,
+    ) -> BayesianNadarayaWatson:
+        """
+        ベイズNW推定を実行
+
+        Parameters
+        ----------
+        preprocessor : ObsidianDataPreprocessor, optional
+            前処理済みのデータ（Noneの場合は内部のものを使用）
+
+        Returns
+        -------
+        BayesianNadarayaWatson
+            学習済みの推定器
+        """
+        if preprocessor is None:
+            preprocessor = self._preprocessor
+
+        if preprocessor is None:
+            raise ValueError(
+                "前処理が実行されていません。run_preprocessing()を先に実行してください。"
+            )
+
+        print("\n=== Nadaraya-Watson推定を開始 ===")
+
+        # 推定器のインスタンス化
+        self._nw_bayes_estimator = BayesianNadarayaWatson(
+            sigma=self.config.nw_sigma,
+            sigma_for_sites=self.config.nw_sigma_for_sites,
+            alpha_0=alpha_0,
+            gamma_0=gamma_0,
+        )
+
+        # モデルの学習
+        print("重み行列を計算しています...")
+        self._nw_bayes_estimator.fit(preprocessor, self.config.nw_variable_names)
+
+        # 全時期・全産地の推定
+        print("\n全時期・全産地の推定を実行しています...")
+        ratio_df, ratio_sites_dict = (
+            self._nw_bayes_estimator.predict_all_periods_origins(
+                preprocessor,
+                self.config.time_periods,
+                self.config.origins,
+            )
+        )
+
+        # 結果の保存
+        self._results["nw_ratio_df"] = ratio_df
+        self._results["nw_ratio_sites_dict"] = ratio_sites_dict
+
+        # データフレームの更新
+        preprocessor._df_elevation = preprocessor.df_elevation.join(
+            ratio_df, on=["x", "y"]
+        )
+
+        # 遺跡データの統合：時期別データをdf_sitesに結合
+        print("遺跡データを統合しています...")
+        combined_sites_df = preprocessor.df_sites.clone()
+
+        # 各時期・産地の組み合わせについてデータを結合
+        for period in ratio_sites_dict.keys():
+            period_sites_df = ratio_sites_dict[period]
+
+            # この時期の各産地データを統合
+            for origin in self.config.origins[:-1]:  # "その他"を除外
+                ratio_col = f"比率_{period}_{origin}"
+
+                if ratio_col in period_sites_df.columns:
+                    # データがある遺跡の比率を取得
+                    period_origin_data = period_sites_df.select(["遺跡ID", ratio_col])
+
+                    # 全遺跡に対して左結合（データがない遺跡はnullになる）
+                    combined_sites_df = combined_sites_df.join(
+                        period_origin_data, on="遺跡ID", how="left"
+                    )
+
+                    # nullを0で埋める
+                    combined_sites_df = combined_sites_df.with_columns(
+                        pl.col(ratio_col).fill_null(0.0)
+                    )
+                else:
+                    # 該当データがない場合は全て0
+                    combined_sites_df = combined_sites_df.with_columns(
+                        pl.lit(0.0).alias(ratio_col)
+                    )
+
+        # preprocessorのdf_sitesを更新
+        preprocessor._df_sites = combined_sites_df
+
+        print(f"遺跡データ統合完了: {combined_sites_df.shape[1]}カラム")
+
+        return self._nw_bayes_estimator
+
     def run_ipp(
         self, preprocessor: Optional[ObsidianDataPreprocessor] = None
     ) -> InhomogeneousPoissonProcess:
@@ -229,6 +351,149 @@ class Model3Pipeline:
         )
 
         return self._ipp_model
+
+    def run_ksbp(
+        self, preprocessor: Optional[ObsidianDataPreprocessor] = None
+    ) -> KSBPModel:
+        """
+        KSBP推定を実行
+
+        Parameters
+        ----------
+        preprocessor : ObsidianDataPreprocessor, optional
+            前処理済みのデータ（Noneの場合は内部のものを使用）
+
+        Returns
+        -------
+        KSBPModel
+            学習済みのモデル
+        """
+        if preprocessor is None:
+            preprocessor = self._preprocessor
+
+        if preprocessor is None:
+            raise ValueError(
+                "前処理が実行されていません。run_preprocessing()を先に実行してください。"
+            )
+
+        print("\n=== KSBP推定を開始 ===")
+
+        # モデルのインスタンス化
+        self._ksbp_model = KSBPModel(
+            variable_names=self.config.nw_variable_names,
+            kappa_coords=self.config.ksbp_kappa_coords,
+            kappa_costs=self.config.ksbp_kappa_costs,
+            kappa_elevation=self.config.ksbp_kappa_elevation,
+            kappa_angle=self.config.ksbp_kappa_angle,
+            kappa_river=self.config.ksbp_kappa_river,
+            gamma=self.config.ksbp_gamma,
+            alpha0=self.config.ksbp_alpha0,
+            j_max=self.config.ksbp_j_max,
+            n_iter=self.config.ksbp_n_iter,
+            burnin=self.config.ksbp_burnin,
+            seed=self.config.ksbp_seed,
+        )
+
+        # モデルの学習
+        print("KSBPサンプリングを実行しています...")
+        ksbp_results = self._ksbp_model.fit(preprocessor)
+
+        # 遺跡の産地構成比予測
+        print("遺跡の産地構成比を計算しています...")
+        ratio_sites_dict = self._ksbp_model.predict_site_ratios(preprocessor)
+
+        # グリッドの産地構成比予測
+        print("グリッドの産地構成比を計算しています...")
+        ratio_df = self._ksbp_model.predict_grid_ratios(preprocessor)
+
+        # 結果の保存
+        self._results["ksbp_results"] = ksbp_results
+        self._results["ksbp_ratio_df"] = ratio_df
+        self._results["ksbp_ratio_sites_dict"] = ratio_sites_dict
+
+        # データフレームの更新
+        preprocessor._df_elevation = preprocessor.df_elevation.join(
+            ratio_df, on=["x", "y"]
+        )
+
+        # 遺跡データの統合
+        print("遺跡データを統合しています...")
+        for period in ratio_sites_dict.keys():
+            period_sites_df = ratio_sites_dict[period]
+            preprocessor._df_sites = preprocessor.df_sites.join(
+                period_sites_df, on="遺跡ID", how="left"
+            )
+
+        return self._ksbp_model
+
+    def run_bayesian_spatial(
+        self, preprocessor: Optional[ObsidianDataPreprocessor] = None
+    ) -> BayesianSpatialMultinomialModel:
+        """
+        ベイズ空間多項回帰推定を実行
+
+        Parameters
+        ----------
+        preprocessor : ObsidianDataPreprocessor, optional
+            前処理済みのデータ（Noneの場合は内部のものを使用）
+
+        Returns
+        -------
+        BayesianSpatialMultinomialModel
+            学習済みのモデル
+        """
+        if preprocessor is None:
+            preprocessor = self._preprocessor
+
+        if preprocessor is None:
+            raise ValueError(
+                "前処理が実行されていません。run_preprocessing()を先に実行してください。"
+            )
+
+        print("\n=== ベイズ空間多項回帰推定を開始 ===")
+
+        # モデルのインスタンス化
+        self._bayesian_spatial_model = BayesianSpatialMultinomialModel(
+            variable_names=["average_elevation"],  # シンプルに標高のみ
+            prior_sigma=self.config.bayesian_spatial_prior_sigma,
+            n_draws=self.config.bayesian_spatial_n_draws,
+            n_tune=self.config.bayesian_spatial_n_tune,
+            random_seed=self.config.bayesian_spatial_seed,
+        )
+
+        # モデルの学習
+        print("ベイズMCMCサンプリングを実行しています...")
+        bayesian_results = self._bayesian_spatial_model.fit(preprocessor)
+
+        # 遺跡の産地構成比予測
+        print("遺跡の産地構成比を計算しています...")
+        ratio_sites_dict = self._bayesian_spatial_model.predict_site_ratios(
+            preprocessor
+        )
+
+        # グリッドの産地構成比予測
+        print("グリッドの産地構成比を計算しています...")
+        ratio_df = self._bayesian_spatial_model.predict_grid_ratios(preprocessor)
+
+        # 結果の保存
+        self._results["bayesian_spatial_results"] = bayesian_results
+        self._results["bayesian_spatial_ratio_df"] = ratio_df
+        self._results["bayesian_spatial_ratio_sites_dict"] = ratio_sites_dict
+
+        # データフレームの更新
+        preprocessor._df_elevation = preprocessor.df_elevation.join(
+            ratio_df, on=["x", "y"], how="left"
+        )
+
+        # 遺跡データの統合
+        print("遺跡データを統合しています...")
+        for period in ratio_sites_dict.keys():
+            period_sites_df = ratio_sites_dict[period]
+            preprocessor._df_sites = preprocessor.df_sites.join(
+                period_sites_df, on="遺跡ID", how="left"
+            )
+
+        return self._bayesian_spatial_model
 
     def run_full_pipeline(self) -> Dict[str, Any]:
         """
@@ -304,6 +569,20 @@ class Model3Pipeline:
         if self._ipp_model is None:
             raise ValueError("IPP推定が実行されていません。")
         return self._ipp_model
+
+    @property
+    def ksbp_model(self) -> KSBPModel:
+        """KSBPモデル"""
+        if self._ksbp_model is None:
+            raise ValueError("KSBP推定が実行されていません。")
+        return self._ksbp_model
+
+    @property
+    def bayesian_spatial_model(self) -> BayesianSpatialMultinomialModel:
+        """ベイズ空間多項回帰モデル"""
+        if self._bayesian_spatial_model is None:
+            raise ValueError("ベイズ空間多項回帰推定が実行されていません。")
+        return self._bayesian_spatial_model
 
     @property
     def results(self) -> Dict[str, Any]:

@@ -5,7 +5,7 @@ Model 3rd の前処理クラス
 
 import os
 import pickle
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import polars as pl
@@ -118,6 +118,54 @@ class ObsidianDataPreprocessor:
             "elevation": self._df_elevation,
             "obsidian": self._df_obsidian,
             "sites": self._df_sites,
+        }
+
+    def create_X_Y(
+        self,
+        variable_names: List[str],
+        time_periods: Dict[int, str],
+        origins: List[str],
+    ) -> Dict[str, Any]:
+        """
+        XとYを作成
+        """
+        grid_coords = self.create_grid_coords()
+        site_coords = self.create_site_coords()
+        W_grid, W_sites = self.create_explanatory_variables(variable_names)
+
+        # 遺跡IDのリストを取得して初期データフレームを作成
+        unique_sites = self.df_obsidian.unique(subset=["遺跡ID"]).sort("遺跡ID")
+        counts_df = pl.DataFrame({"遺跡ID": unique_sites["遺跡ID"]})
+
+        for period in time_periods.keys():
+            for origin in origins[:-1]:
+                _, target_counts = self.preprocess_obsidian_data(
+                    target_period=period, target_origin=origin
+                )
+                col_name = f"count_{period}_{origin}"
+                counts_df = counts_df.with_columns(
+                    pl.Series(name=col_name, values=target_counts).cast(pl.Int64)
+                )
+
+        counts = counts_df.drop("遺跡ID").to_numpy()
+
+        X = np.concatenate([site_coords, W_sites], axis=1)
+        X_test = np.concatenate([grid_coords, W_grid], axis=1)
+        Y = counts
+
+        X_columns = ["lon", "lat"] + variable_names
+        Y_columns = [
+            f"count_{period}_{origin}"
+            for period in time_periods.keys()
+            for origin in origins[:-1]
+        ]
+
+        return {
+            "X": X,
+            "Y": Y,
+            "X_test": X_test,
+            "X_columns": X_columns,
+            "Y_columns": Y_columns,
         }
 
     def convert_to_grid_coords(

@@ -1,0 +1,29 @@
+\begin{frame}{多項カウントデータとしての定式化}
+
+遺跡$i$における産地$k$の黒曜石出土数$y_{ik}$を直接モデル化する標準的アプローチである。各遺跡$i$での総出土数を$N_i = \sum_{k=1}^K y_{ik}$とし、観測ベクトル$\mathbf{y}_i = (y_{i1}, \ldots, y_{iK})$は多項分布に従うとする：
+
+$$\mathbf{y}_i \sim \text{Multinomial}(N_i, \boldsymbol{\pi}(s_i))$$
+
+ここで$\boldsymbol{\pi}(s_i) = (\pi_1(s_i), \ldots, \pi_K(s_i))$は位置$s_i$での産地構成比である。構成比には制約$\sum_{k=1}^K \pi_k(s) = 1$, $\pi_k(s) \geq 0$が課される。
+
+この定式化では、総出土数$N_i$の変動が明示的に考慮され、発掘規模の違いやサンプリング努力の差異を自然に組み込むことができる。尤度関数は
+$$\mathcal{L} = \prod_{i=1}^n \frac{N_i!}{\prod_{k=1}^K y_{ik}!} \prod_{k=1}^K \pi_k(s_i)^{y_{ik}}$$
+で与えられ、観測されたカウント情報を完全に活用する。
+
+\end{frame}
+
+\begin{frame}{Compositional Dataとしての定式化}
+
+観測比率$\tilde{\boldsymbol{\pi}}_i = \mathbf{y}_i/N_i$を単体空間$\mathcal{S}^{K-1}$上のデータとして直接扱うアプローチである。Compositional dataの特徴である尺度不変性（scale invariance）と相対性（relativity）を重視し、比率情報のみに焦点を当てる。
+
+Aitchison幾何学に基づき、Additive Log-Ratio (ALR)変換を適用：
+$$\eta_k(s) = \log\left(\frac{\pi_k(s)}{\pi_K(s)}\right), \quad k = 1, \ldots, K-1$$
+
+変換後の$\boldsymbol{\eta}(s) = (\eta_1(s), \ldots, \eta_{K-1}(s))$は制約のない実数空間$\mathbb{R}^{K-1}$上で多変量正規分布に従うとモデル化：
+$$\boldsymbol{\eta}(s) \sim \mathcal{N}(\boldsymbol{\mu}(s), \Sigma)$$
+
+元の構成比は逆変換により
+$$\pi_k(s) = \frac{\exp(\eta_k(s))}{1 + \sum_{j=1}^{K-1} \exp(\eta_j(s))}$$
+で復元される。この定式化では、観測されたカウント数$N_i$の大小に依存しない比率構造の推定が可能となる。
+
+\end{frame}

@@ -1,0 +1,950 @@
+\documentclass[xelatex, 8pt]{beamer}
+\mode<presentation>{\usetheme{Dresden}}
+% Boadilla
+\usecolortheme[RGB={22, 74, 132}]{structure}
+%\usefonttheme{professionalfonts}
+
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+%\renewcommand{\familydefault}{\sfdefault}
+
+% IPAexMincho
+% Noto Serif CJK JP
+
+\usepackage{tikz}
+\usetikzlibrary{intersections, calc, arrows.meta}
+
+%seagullいいね
+%
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{subcaption}  %図を横に配置してそれぞれにキャプションを追加
+
+% 定理環境で使う言葉を用意
+\theoremstyle{plain}
+\newtheorem{thm}{Theorem}
+\newtheorem*{thm*}{Theorem}
+
+\theoremstyle{definition}
+\newtheorem{dfn}{Definition}
+
+% フォントサイズの設定
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subbody}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subsubbody}{size=\normalsize}
+
+% リンクに関するセットアップ
+\usepackage{url}
+
+\usepackage[dvipdfmx]{color, hyperref}
+\usepackage{cite}
+
+% beamerではなぜかこれが必要らしい
+%\hypersetup{pdfborder={0 0 1}}
+\usepackage{xcolor}
+\hypersetup{
+	colorlinks=true,
+	citecolor=blue,
+	linkcolor=red,
+	urlcolor=orange,
+}
+
+%ページ番号
+\setbeamertemplate{footline}[frame number]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Metadata %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\hypersetup
+{
+	%Separate multiple authors by comma
+	pdfauthor={},
+	pdftitle={Spatial Statistical Models for Obsidian Source Composition: Progress and Challenges},
+	pdfsubject={},
+	pdfkeywords={},
+	colorlinks=false
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Title related %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title[Contact: Aru Ohta (otaru1214@gmail.com)]{黒曜石産地構成比の空間統計モデル}
+\subtitle{Spatial Statistical Models for Obsidian Source Composition}
+\date[2025]{2025-7-1}
+\author[M2 Aru Ohta]{M2 Aru Ohta}
+\institute[Kyoto University]{京都大学情報学研究科}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Presentation begins here %%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents
+\end{frame}
+
+\section{これまでの振り返り}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{研究目的}
+
+    \begin{itemize}
+        \item 目的：任意の地点における黒曜石の\textbf{産地構成比}を推定する
+        \\[2mm]
+        \item そのために、
+        \\[2mm]
+            \begin{itemize}
+                \item 黒曜石が出土した遺跡の位置
+                \item それぞれの遺跡から出土したそれぞれの産地の黒曜石の出土数
+            \end{itemize}
+            \\[2mm]
+            の2つをモデル化することを考える。
+            \\[2mm]
+            前者についてのモデルを\textbf{遺跡の存在確率モデル}、後者についてのモデルを\textbf{産地構成比モデル}とよぶことにする。
+
+    \end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{データの基本情報}
+    \begin{itemize}
+        \item \textbf{対象領域}: 関東地方（北緯34-37度、東経138-141度）
+        \item \textbf{データ規模}:
+        \begin{itemize}
+            \item 遺跡数: 224箇所
+            \item 総出土数: 31,244点
+        \end{itemize}
+        \vspace{2mm}
+        \item \textbf{時期区分}:
+        \begin{itemize}
+            \item 早期・早々期 (約12,000年前〜7,000年前): 53遺跡
+            \item 前期 (約7,000年前〜5,500年前): 61遺跡
+            \item 中期 (約5,500年前〜4,500年前): 146遺跡
+            \item 後期 (約4,500年前〜3,500年前): 59遺跡
+            \item 晩期 (約3,500年前〜2,800年前): 18遺跡
+        \end{itemize}
+        \vspace{2mm}
+        \item \textbf{産地分類}:
+        \begin{itemize}
+            \item 神津島
+            \item 信州（和田峠、男女倉、諏訪、蓼科）
+            \item 箱根
+            \item 高原山
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{モデル化の方針}
+
+    これまで、2つの問題に対して、以下のモデルを実装してきた：
+
+    \vspace{3mm}
+
+    \textbf{1: 遺跡の存在確率モデル（非斉次ポアソン過程）}
+    \begin{itemize}
+        \item $X \sim \text{IPP}(\lambda)$
+        \item $\lambda(s) = \lambda^*　\cdot　\frac{\exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}{1 + \exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}$
+        \item 説明変数: 標高、傾斜、産地からの距離、河川距離
+    \end{itemize}
+
+    \vspace{3mm}
+
+    \textbf{2: 産地構成比モデル（ノンパラメトリック回帰）}
+    \begin{itemize}
+        \item Nadaraya-Watson推定量（頻度主義）
+        \item Kernel Stick-Breaking Process（ベイズ）
+        \item Tobler's Hiking Functionによる地形考慮距離
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{非斉次ポアソン過程モデル}
+    非斉次ポアソン過程$X$を用いて遺跡の空間分布をモデル化する。観測領域$\mathcal{D}$上での計数過程$X$が強度$\lambda(s)$を持つ非斉次ポアソン過程に従うとき、任意の可測集合$D \subset \mathcal{D}$に対して
+    $$X(D) \sim \text{Poisson}\left(\int_D \lambda(s) ds\right)$$
+    が成り立つ。
+
+    遺跡の存在確率を考慮するため、強度関数を以下のように分解する：
+    $$\lambda(s) = \lambda^* \cdot q(s)$$
+    ここで$\lambda^* > 0$は強度の上限値、$q(s)$は位置$s$での存在確率を表し、
+    $$q(s) = \frac{\exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}{1 + \exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}$$
+    として定義される。$\boldsymbol{W}(s)$は位置$s$での説明変数ベクトル（標高、傾斜、産地からの距離など）である。
+\end{frame}
+
+\begin{frame}{非斉次ポアソン過程モデル}
+    尤度関数に含まれる計算困難な積分項$\int_{\mathcal{D}} q(s) ds$を回避するため、Moreira and Gamerman (2022)\cite{Moreira2022}の潜在変数アプローチを採用する。
+
+    偽不在を表す潜在点過程$U$を導入：
+    $$U \sim \text{IPP}(\lambda^*(1-q))$$
+
+    この拡張により、同時尤度は以下のように表現される：
+    $$P(X, U \mid \boldsymbol{\beta}, \lambda^*) = \exp \left( - \lambda^* |\mathcal{D}| \right) \cdot \frac{(\lambda^*)^{n}}{n_X!n_U!} \prod_{i=1}^{n} \frac{\left\{\exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right)\right\}^{y_i}}{1 + \exp\left(\boldsymbol{W}(s_i)^\top \boldsymbol{\beta}\right)}$$
+
+    ここで$n = n_X + n_U$、$y_i$は観測点$(y_i=1)$と潜在点$(y_i=0)$を区別する二値変数である。Polya-Gamma変数を用いることで効率的なギブスサンプリングが可能となり、各パラメータの事後分布は解析的に求まる。
+\end{frame}
+
+\begin{frame}{非斉次ポアソン過程モデル: 結果}
+    \begin{figure}\centering\includegraphics[width=0.6\textwidth]{fig/trace_site_probability.png}\caption{各パラメータの事後分布とトレースプロット。上から、標高、傾斜角度、神津島からの距離、信州からの距離、箱根からの距離、高原山からの距離、河川からの距離}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{非斉次ポアソン過程モデル: 結果}
+    \begin{figure}\centering\includegraphics[width=0.8\textwidth]{fig/site_probability.png}\caption{領域全体での予測}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Nadaraya-Watsonモデル}
+    遺跡$i$における産地$k$の黒曜石出土数を$y_{ik}$とし、位置$s_i$での産地構成比$\pi_k(s_i) = y_{ik}/\sum_{k'}y_{ik'}$を観測値とする回帰問題として定式化する。
+
+    任意の位置$s$における産地$k$の構成比$\pi_k(s)$を推定するため、以下のNadaraya-Watson推定量を用いる：
+
+    $$\hat{\pi}_k(s) = \frac{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot y_{ik}}{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot \sum_{k'} y_{ik'}}$$
+
+    ここで$K_h(\cdot)$はバンド幅$h$を持つカーネル関数、$d(s,s')$は2点間の距離である。ここではガウスカーネル
+    $$K_h(d) = \frac{1}{h^2} \exp \left(-\frac{d^2}{2h^2}\right)$$
+    を採用し、各遺跡からの観測値を距離に応じて重み付け平均することで連続的な産地構成比の空間分布を推定する。
+\end{frame}
+
+\begin{frame}{Nadaraya-Watsonモデル}
+    カーネルに使用する距離関数については、従来のユークリッド距離に代わり、地形の起伏を考慮したTobler's Hiking Functionに基づく移動コスト距離を用いる。隣接する2地点間の移動速度(km/h)は勾配$S = \tan\theta$に対して
+    $$W = 6e^{-3.5|S+0.05|}$$
+    で与えられる。この速度から移動時間を計算し、領域全体を250mメッシュに分割してグラフネットワークを構築する。
+    各メッシュ間の移動コストを辺重みとし、全頂点間の最短経路問題として
+    $$C_u(v) \leftarrow \min\left(\{C_u(v)\}\cup \{C_u(w) + t_{w\rightarrow v} \mid w \in \mathcal{N}_v\}\right)$$
+    の更新式により計算する。海上移動は木造丸木船の速度4km/hを仮定し、沿岸部の地形に応じて上陸コストを設定する。
+
+\end{frame}
+
+\begin{frame}{Nadaraya-Watsonモデル: 結果}
+
+\begin{figure}\centering\includegraphics[width=0.9\textwidth]{fig/obsidian_ratio_all_NW.png}\caption{横軸が時期(左から順)、縦軸が産地（上から神津島、信州、箱根、高原山）を表す}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{Nadaraya-Watsonモデル: 結果}
+\begin{figure}\centering\includegraphics[width=1\textwidth]{fig/obsidian_ratio_0_神津島.png}\caption{早期・早々期、神津島}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Multinomial KSBPモデル}
+    Dunson and Park (2008)のKernel Stick-Breaking Process (KSBP)を多項分布データに拡張し、産地構成比の空間変動をノンパラメトリックベイズ的にモデル化する。観測空間$\mathcal{X} \subset \mathbb{R}^d$上で、位置$x$に依存する確率測度$G_x$を以下のStick-breaking表現で構成する：
+
+    $$G_x = \sum_{h=1}^{\infty} \pi_h(x) G_h^*$$
+
+    ここで$\pi_h(x)$は位置$x$での第$h$成分の重み、$G_h^*$は各成分に対応する確率測度である。重み$\pi_h(x)$は空間的局所性を反映するよう以下で定義される：
+    $$\pi_h(x) = W_h(x) \prod_{l < h} [1 - W_l(x)]$$
+    $$W_h(x) = V_h K(x, \Gamma_h)$$
+
+    $V_h \sim \text{Beta}(1, \lambda)$はstick-breaking比率、$\Gamma_h \sim H$は空間的位置パラメータ、$K(x, \Gamma)$はガウスカーネル$\exp(-\|x-\Gamma\|^2/(2h^2))$である。
+\end{frame}
+
+\begin{frame}{Multinomial KSBPモデル}
+    各クラスタ$h$における産地構成比$\theta_h$をディリクレ分布から生成し、混合成分を離散測度$G_h^* = \delta_{\theta_h}$として設定する：
+    $$\theta_h \sim \text{Dirichlet}\left(\frac{\gamma_0}{K}, \ldots, \frac{\gamma_0}{K}\right)$$
+
+    位置$s$での産地構成比は無限混合として表現される：
+    $$\pi(s) = \sum_{h=1}^{\infty} \pi_h(s) \theta_h$$
+
+    観測データは多項分布に従うとモデル化し、補助変数$z_i$を導入してクラスタ割り当てを明示的に扱う：
+    $$z_i \mid s_i \sim \text{Categorical}(\pi_1(s_i), \pi_2(s_i), \ldots)$$
+    $$\mathbf{y}_i \mid z_i \sim \text{Multinomial}(N_i, \theta_{z_i})$$
+
+    この階層構造により、空間的に近い遺跡は類似したクラスタに割り当てられ、産地構成比の空間的連続性が自然に表現される。
+\end{frame}
+
+\begin{frame}{Multinomial KSBPモデル}
+    各パラメータの完全条件付き事後分布は以下のように導出される。産地構成比パラメータ$\theta_h$については、ディリクレ分布の共役性により
+    $$\theta_h \mid \mathbf{z}, \mathbf{y} \sim \text{Dirichlet}\left(\frac{\gamma_0}{K} + S_{h1}, \ldots, \frac{\gamma_0}{K} + S_{hK}\right)$$
+    が得られる。ここで$S_{hk} = \sum_{i:z_i=h} y_{ik}$はクラスタ$h$における産地$k$の総出土数である。
+
+    クラスタ割り当て$z_i$の事後分布はカテゴリカル分布となり、未規格化重み
+    $$w_{ih} = \pi_h(s_i) \prod_{k=1}^K \theta_{hk}^{y_{ik}}$$
+    を用いて$P(z_i = h \mid \text{rest}) = w_{ih}/\sum_g w_{ig}$で与えられる。
+
+    Stick-breaking比率$V_h$については、Walker (2007)のslice samplingを適用し、$V_h \mid \text{rest} \sim \text{Beta}(1+m_h, \lambda+r_h)$の更新式を得る。位置パラメータ$\Gamma_h$は解析的な事後分布が得られないため、ランダムウォークMetropolis-Hastings法を用いる。
+\end{frame}
+
+\begin{frame}{Multinomial KSBPモデル: 結果}
+
+例として早期・早々期の神津島、信州の結果を示す。
+
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/image (4).png}
+        \caption{$\pi_k(s)$の事後平均: 早期・早々期、神津島}
+        \label{fig:pointprocess1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/image (5).png}
+        \caption{$\pi_k(s)$の事後平均: 早期・早々期、信州}
+        \label{fig:pointprocess2}
+    \end{subfigure}
+    \label{fig:both-predictions}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{Multinomial KSBPモデル: 結果}
+
+観測データの少ない箇所の事後標準偏差が大きく、推定の不確実性を評価することができた。
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.8\linewidth]{fig/image (6).png}
+    \caption{$\pi_k(s)$の事後標準偏差}
+    \label{fig:enter-label}
+\end{figure}
+\end{frame}
+
+\section{現在の課題}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{現在の課題}
+
+    今後のモデル開発・分析における課題は以下の３つに集約される：
+
+    \begin{itemize}
+        \item 課題1: モデルの評価方法が曖昧
+        \item 課題2: より小規模な地域における評価・解釈
+        \item 課題3: データ数の少なさに対する対策
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{課題1: モデルの評価方法が曖昧}
+    これまで実装した3つのモデルについて、推定結果の個人的評価を整理する。
+    \vspace{3mm}
+
+    \textbf{1. 非斉次ポアソン過程（遺跡存在確率）}:
+    \begin{itemize}
+        \item 遺跡の存在確率を適切に推定できている
+        \item パラメトリックなので各特徴量の効果が見えやすい
+        \item 考古学的知見との対応も良好
+    \end{itemize}
+
+    \textbf{2. Nadaraya-Watson推定量（産地構成比）}:
+    \begin{itemize}
+        \item 推定結果が安定しており、直感的に理解しやすい
+        \item 信州と神津島の時期別比較などが顕著に見えて考古学的仮説にも合致
+        \item ノンパラメトリックなため特徴量の効果が見えづらい
+        \item 今後のモデル拡張の余地があまりない
+    \end{itemize}
+
+    \textbf{3. Kernel Stick-Breaking Process（産地構成比）}:
+    \begin{itemize}
+        \item ハイパーパラメータ探索がまだ不十分なため評価が難しい
+        \item ノンパラメトリックなので解釈もしづらい
+        \item ハイパーパラメータの数が多いので効率的な探索が必要
+    \end{itemize}
+
+    \vspace{3mm}
+    →今後のモデル開発の方針を立てていく必要があるが、\textbf{客観的なモデル評価の枠組みをまだ用意できていない}
+
+\end{frame}
+
+\begin{frame}{課題1: モデルの評価方法が曖昧}
+    モデルの客観的評価指標を（仮でも良いので）設定して、以下の問題を解決したい：
+
+    \vspace{3mm}
+    \begin{itemize}
+        \item 予測性能の客観的評価が困難
+        \item モデル間の比較基準が不明確
+        \item ハイパーパラメータ選択の根拠が薄弱
+    \end{itemize}
+
+    \vspace{5mm}
+
+\end{frame}
+
+\begin{frame}{課題2: より小規模な地域における評価・解釈}
+    現在の分析は関東地方全体での粗い解析に留まっており、遺跡立地の詳細なメカニズムを分析できていない：
+
+    \vspace{3mm}
+
+    \begin{figure}
+            \centering
+            \includegraphics[width=0.5\linewidth]{fig/kepler_slope_angle_and_sites.png}
+            \caption{平均傾斜角度と遺跡位置}
+            \label{fig:enter-label}
+    \end{figure}
+
+    \begin{itemize}
+        \item 遺跡は平野のうち、丘陵の裾・麓の部分に分布しやすいという知見がある
+        \item しかし、領域内の標高・傾斜の分散が大きく、遺跡が立地する平野におけるわずかな地形変動を捉えられていない
+        \item →遺跡立地の詳細なメカニズムが不明
+    \end{itemize}
+
+    \vspace{4mm}
+
+    \textbf{必要な改善}: 町レベルでの高解像度解析
+    \begin{itemize}
+        \item 10m/5mメッシュによる高解像度化
+        \item 海岸線の詳細な表現
+        \item 一つの町の中での遺跡分布パターン分析
+    \end{itemize}
+
+    \vspace{4mm}
+
+    \textbf{検証したい考古学的仮説}:
+    \begin{itemize}
+        \item 「真っ平らな場所より山麓・丘陵の裾野に遺跡が多い」
+        \item 河川との微妙な距離関係
+        \item 傾斜の最適範囲の存在
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{課題3: データ数の少なさに対する対策}
+    遺跡のデータ数が十分とはいえず、特に縄文時代晩期のサンプルは18箇所しかない。
+
+    \vspace{3mm}
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.8\linewidth]{fig/obsidian_ratio_4_高原山.png}
+        \caption{晩期の高原山の推定結果。データ数が少なく、東にかけて比率が上昇していく傾向は尤もらしいとは思えない。}
+        \label{fig:enter-label}
+    \end{figure}
+
+    \vspace{5mm}
+
+\end{frame}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+
+\section{方針1. 問題の再定式化}
+
+\begin{frame}{問題の再定式化}
+
+    課題1に関連し、今後様々なタイプの産地構成比のモデルを扱い、比較を行っていく。
+
+    その際、少し複雑である今回のデータの出力形式について再定式化を行うことで、今後のモデル構築の見通しをよくしておく。
+
+\end{frame}
+
+\begin{frame}{現在の定式化}
+
+以下では、黒曜石の出土時期$t$についてはすべて独立に扱うことにする。
+
+\begin{itemize}
+\item 調査領域を$\mathcal{D} \subset \mathbb{R}^2$とする。遺跡$i = 1, ...., n_{X}$の位置を$s_i \in \mathcal{D}$とし、その地点における共変量を$\tilde{\boldsymbol{W}}(s_i)$とする。
+\item そして、その遺跡における産地$k=1, \ldots, K$の黒曜石の出土数を$y_{ik}$とする。
+
+\vspace{2mm}
+
+ここで、調査領域内の任意の地点$s \in \mathcal{D}$における黒曜石の産地構成比
+
+$$
+\boldsymbol{\pi}(s) = (\pi_1(s), \ldots , \pi_{K}(s)), \quad \sum_{k=1}^{K}\pi_k(s) = 1$$
+
+を求める問題を考える。
+\end{itemize}
+\end{frame}
+
+\begin{frame}{問題の再定式化}
+
+    以上の現在の定式化を、幅広いクラスの統計モデルでモデル化する際、主に２つの方針がある：
+
+    \begin{itemize}
+        \item 多項カウントデータとしての定式化
+        \item Compositional Dataとしての定式化
+    \end{itemize}
+
+    \vspace{3mm}
+
+    →今後は、この両方のどちらのタイプの出力に合わせてモデルを作っているのかを意識して、より性能がいい方を採用することにする。
+
+\end{frame}
+
+
+
+\begin{frame}{多項カウントデータとしての定式化}
+
+遺跡$i$における産地$k$の黒曜石出土数$y_{ik}$を直接モデル化する方法。
+
+\vspace{2mm}
+
+各遺跡$i$での総出土数を$N_i = \sum_{k=1}^K y_{ik}$とし、観測ベクトル$\mathbf{y}_i = (y_{i1}, \ldots, y_{iK})$は多項分布に従うとする：
+
+$$\mathbf{y}_i \sim \text{Multinomial}(N_i, \boldsymbol{\pi}(s_i))$$
+
+ここで$\boldsymbol{\pi}(s_i) = (\pi_1(s_i), \ldots, \pi_K(s_i))$は位置$s_i$での産地構成比である。構成比には制約$\sum_{k=1}^K \pi_k(s) = 1$, $\pi_k(s) \geq 0$が課される。尤度関数は
+$$\mathcal{L} = \prod_{i=1}^n \frac{N_i!}{\prod_{k=1}^K y_{ik}!} \prod_{k=1}^K \pi_k(s_i)^{y_{ik}}$$
+となる。
+
+\vspace{2mm}
+→通常であればこの方法を使うのが一般的だが、今回の黒曜石のモデルは\textbf{遺跡ごとに出土数に大きなバイアスがあり、黒曜石の絶対数を使うことが一部の遺跡の比率の過大評価につながる恐れがある}
+
+\end{frame}
+
+\begin{frame}{Compositional Dataとは}
+
+Compositional dataとは、全体に対する各成分の比率を表すデータで、成分の和が1（または100％）に制約されるデータ型である。地球科学、生物学、経済学など多くの分野で扱われている。
+
+典型例として、岩石の鉱物組成、生物群集の種構成、家計支出の項目別比率などがある。今回のデータだと、各遺跡における産地別黒曜石の構成比$\boldsymbol{\pi}_i = (\pi_{i1}, \ldots, \pi_{iK})$がcompositional dataに相当する。
+
+Compositional dataの一番の特徴は、以下の制約が常に存在することであり、
+$$\sum_{k=1}^K \pi_{ik} = 1, \quad \pi_{ik} \geq 0$$
+
+通常の統計手法をそのまま適用すると、この制約条件や扱われない問題が生じる。ただ、Aitchison (1986)が提案した対数比変換をすることで、制約のない実数空間での分析が可能になる。
+
+\end{frame}
+
+\begin{frame}{Compositional Dataとしての定式化}
+
+観測比率$\tilde{\boldsymbol{\pi}}_i = \mathbf{y}_i/N_i$を単体空間$\mathcal{S}^{K-1}$上のデータとして直接扱うアプローチである。観測データから出土数の情報を落として、比率情報のみに焦点を当てる。
+
+Aitchison (1982)\cite{Aitchison1982-yc}に基づき、Additive Log-Ratio (ALR)変換を適用すると、
+$$\eta_k(s) = \log\left(\frac{\pi_k(s)}{\pi_K(s)}\right), \quad k = 1, \ldots, K-1$$
+
+となる。そして変換後の$\boldsymbol{\eta}(s) = (\eta_1(s), \ldots, \eta_{K-1}(s))$は制約のない実数空間$\mathbb{R}^{K-1}$上で多変量正規分布に従うとモデル化することで、通常の実数値従属変数として統計モデルを作ることができる。
+$$\boldsymbol{\eta}(s) \sim \mathcal{N}(\boldsymbol{\mu}(s), \Sigma)$$
+
+元の構成比は逆変換により
+$$\pi_k(s) = \frac{\exp(\eta_k(s))}{1 + \sum_{j=1}^{K-1} \exp(\eta_j(s))}$$
+で復元される。こう定式化すると、観測されたカウント数$N_i$の大小に依存せず、\textbf{純粋に比率のみを観測データとして推定が可能となる。}
+
+\end{frame}
+\section{方針2. モデルの評価方法}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{モデルの評価方法}
+
+今後様々なモデルを試していく上で、課題１で触れた通り、客観的な評価基準が求められる。
+
+\vspace{3mm}
+→今回のデータに適した評価指標と、モデルの評価方法として、以下のものを採用する。
+
+\vspace{2mm}
+\textbf{産地構成比の推定値の評価指標}:
+    \begin{itemize}
+        \item \textbf{Aitchison Distance} (主要指標):
+        $$d_A(x,y) = \sqrt{\sum_{i=1}^{D} \left(\ln\frac{x_i}{g(x)} - \ln\frac{y_i}{g(y)}\right)^2}$$
+        \item \textbf{Total Variation} (補助指標):
+        $$\text{totvar}(x,y) = \frac{1}{2D}\sum_{i=1}^{D}\sum_{j=1}^{D}(\ln(x_i/x_j) - \ln(y_i/y_j))^2$$
+    \end{itemize}
+
+\textbf{モデル評価基準}
+\begin{itemize}
+    \item Leave-One-Out Cross Validation (LOOCV)
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Aitchison Distance}
+
+    Aitchison Distance\cite{Aitchison1982-yc}は、Compositional data間の距離を測定する標準的な指標。
+
+    $$d_A(\mathbf{x}, \mathbf{y}) = \sqrt{\sum_{i=1}^{D} \left(\ln\frac{x_i}{g(\mathbf{x})} - \ln\frac{y_i}{g(\mathbf{y})}\right)^2}$$
+
+    ここで$g(\mathbf{z}) = \left(\prod_{i=1}^D z_i\right)^{1/D}$は幾何平均。
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.4\linewidth]{fig/aichison_distance.png}
+        \caption{太田ら(2006)\cite{ohta2006}より引用。}
+        \label{fig:enter-label}
+    \end{figure}
+
+\end{frame}
+
+\begin{frame}{Total Variation}
+
+    Total Variation は、確率分布間の距離を測定する指標で、Compositional dataの文脈では全ての成分間の対数比の分散として定義される。
+
+    $$\text{TV}(\mathbf{x}, \mathbf{y}) = \frac{1}{2D^2}\sum_{i=1}^{D}\sum_{j=1}^{D}(\ln(x_i/x_j) - \ln(y_i/y_j))^2$$
+
+\end{frame}
+
+\begin{frame}{Leave-One-Out Cross Validation (LOOCV)}
+
+    データ数が限られているため、モデル比較にはLeave-One-Out Cross Validationを採用する。
+
+    \vspace{4mm}
+
+    \textbf{手順}:
+    \begin{enumerate}
+        \item 全遺跡から1つの遺跡をランダムに除外
+        \item 残りの遺跡データでモデルを学習
+        \item 除外した遺跡での産地構成比を予測
+        \item 実際の構成比と予測値を比較
+        \item 異なる遺跡に対して複数回試行し、平均精度を算出
+    \end{enumerate}
+
+    \vspace{5mm}
+
+
+\end{frame}
+
+\begin{frame}{結果1: ハイパーパラメータ最適化}
+
+    今回採用した評価指標とモデル比較方法を用いて、まず、Nadaraya-Watsonモデルのハイパーパラメータのうちの一つである、カーネルのバンド幅の最適化を行った。
+
+    \vspace{4mm}
+
+    \textbf{ハイパーパラメータ探索対象}:
+    \begin{itemize}
+        \item Nadaraya-Watsonモデル:
+        \begin{itemize}
+            \item $\sigma$: グリッド間カーネルバンド幅
+        \end{itemize}
+    \end{itemize}
+
+    \vspace{5mm}
+
+    \textbf{結果}：
+    \begin{table}
+        \centering
+        \begin{tabular}{l|cc}
+            \hline
+            $\sigma$ & Aitchison Distance & Total Variation \\
+            \hline
+            300 & 24.97 & 873.22 \\
+            500 & 11.78 & 148.59 \\
+            700 & 9.45 & 94.01 \\
+            \textbf{1000} & \textbf{9.34} & \textbf{92.13} \\
+            1500 & 10.11 & 105.12 \\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    \vspace{3mm}
+    →1000が最適であることが示唆された。可視化して直観にも合うか確認する：
+
+\end{frame}
+
+\begin{frame}{結果1: ハイパーパラメータ最適化}
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/nw_hyperparameter/300.png}
+        \label{fig:sigma300}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/nw_hyperparameter/700.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/nw_hyperparameter/1000.png}
+        \label{fig:sigma1000}
+    \end{subfigure}
+        \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/nw_hyperparameter/1500.png}
+        \label{fig:sigma1500}
+    \end{subfigure}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{結果2: モデル選択}
+
+    次に、モデル選択を行う。Nadaraya-Watsonモデルと、Multinomial KSBPモデルを比較する。
+
+    \vspace{4mm}
+
+    \textbf{比較するモデル}:
+    \begin{itemize}
+        \item Nadaraya-Watsonモデル （ハイパラ探索済みのため最適ハイパラ）
+        \item Multinomial KSBPモデル（ハイパラ未探索のため手動で調整した以下）
+        \begin{itemize}
+            \item $\kappa_{\text{coords}} = 0.002$
+            \item $\kappa_{\text{costs}} = 2.0$
+            \item $\kappa_{\text{elevation}} = 10000.0$
+            \item $\kappa_{\text{angle}} = 3.0$
+            \item $\kappa_{\text{river}} = 2.0$
+            \item $\gamma = 0.1$
+            \item $\alpha_0 = 0.1$
+        \end{itemize}
+    \end{itemize}
+
+    \vspace{5mm}
+
+    \textbf{結果}：
+    \begin{table}
+        \centering
+        \begin{tabular}{l|cc}
+            \hline
+            Model & Aitchison Distance & Total Variation \\
+            \hline
+            \textbf{NW (best param)} & \textbf{9.34} & \textbf{92.13} \\
+            KSBP & 9.85 & 103.24 \\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    \vspace{3mm}
+    →現在のハイパラの状態だと、NWの方が精度が高い（直観にも合致する）
+
+\end{frame}
+
+\section{方針3: 今後のモデル案}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{段階1: 産地構成比パラメトリックモデルの構築}
+
+    これまでは、産地構成比の推定をノンパラメトリックに行ってきた。
+
+    \vspace{2mm}
+
+    これからは、パラメトリックな方法を模索していきたい
+
+    \vspace{2mm}
+
+    理由:
+    \begin{itemize}
+        \item 特徴量ごとの個別の効果を測り、解釈性を高めたい
+        \item 産地からの距離の線形効果を除去し、非線形な効果を捉えたい
+    \end{itemize}
+
+    \vspace{5mm}
+
+    \textbf{パラメトリック回帰の例}:
+    $$\log\left(\frac{\pi_k(s)}{\pi_K(s)}\right) = \beta_{k0} + \sum_{j=1}^p \beta_{kj} W_j(s) + w_k(s)$$
+    \begin{itemize}
+        \item $\beta_{kj}$: 産地$k$に対する共変量$j$の効果
+        \item $w_k(s)$: 空間ランダム効果（ガウス過程）
+    \end{itemize}
+
+    \vspace{5mm}
+
+\end{frame}
+
+\begin{frame}{段階2: データの少なさに対する対策：時間相関の導入}
+
+    課題3に対する対処として、時間相関による階層化を図りたい
+
+    \vspace{3mm}
+
+    → 階層ベイズモデルによって、時期間で共通する構造を共有したい。
+    \vspace{3mm}
+
+    \textbf{時空間モデル}:
+    $$\boldsymbol{\beta}_t \sim \mathcal{N}(\boldsymbol{\mu}_\beta, \Sigma_\beta)$$
+    \begin{itemize}
+        \item $t$: 時期インデックス
+        \item $\boldsymbol{\mu}_\beta, \Sigma_\beta$: 時代間で共有されるハイパーパラメータ
+    \end{itemize}
+
+    \vspace{5mm}
+\end{frame}
+
+\begin{frame}{段階3: マーク付き点過程による２つのモデルの統合}
+
+    遺跡の存在確率、産地構成比の2つのモデルが独立であるとしているが、これは近似になっている。
+    $P(X, \pi) = P(X) P(\pi \mid X)$であるが、現在は$P(\pi \mid X) = P(\pi)$という近似をしている。
+    遺跡の立地情報を踏まえて構成比を推定するためには、両者を統合してマーク付き点過程として扱うのが望ましいと考えられる。
+
+\end{frame}
+
+\section{まとめと今後の課題}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{まとめ}
+
+    現在は、以下のような課題に取り組む必要がある：
+
+    \begin{itemize}
+        \item 課題1: モデルの評価方法が曖昧
+        \item 課題2: より小規模な地域における評価・解釈
+        \item 課題3: データ数の少なさに対する対策
+    \end{itemize}
+
+    そのために、
+
+    \begin{itemize}
+        \item 問題を、多項カウントデータかCompositional Dataとして定式化し
+        \item Aitchison Distanceなどを使ってモデル評価を行い
+        \item パラメトリックモデルを基礎的なものから徐々に拡張していく
+    \end{itemize}
+
+    という方針でモデル開発を進めていく。
+
+\end{frame}
+
+\section{おまけ}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{線形回帰モデルの実装}
+
+    パラメトリックモデルの最も基本的な例として、線形回帰モデルを実装した。
+
+    \vspace{3mm}
+    \textbf{モデル定式化}:
+
+    遺跡$i$における産地$k$の観測カウントを$y_{ik}$とし、多項分布として
+    $$\mathbf{y}_i \sim \text{Multinomial}(N_i, \boldsymbol{\pi}(s_i))$$
+
+    $$\pi_k(s) = \frac{\exp(\eta_k(s))}{1 + \sum_{j=1}^{K-1} \exp(\eta_j(s))}$$
+
+    産地構成比に対してAdditive Log-Ratio (ALR)変換を適用し、単純な線形回帰モデルで推定。
+    $$\eta_k(s) = \log\left(\frac{\pi_k(s)}{\pi_K(s)}\right) = \beta_{k0} + \beta_{k1} W(s) $$
+
+    ここで$W(s)$は共変量であり、ここでは標高を使う。
+\end{frame}
+
+\begin{frame}{線形回帰モデルの実装}
+    \textbf{事前分布設定}:
+    \begin{align}
+        \boldsymbol{\beta}_k &\sim \mathcal{N}(\mathbf{0}, \sigma_{\beta}^2 \mathbf{I})\\
+    \end{align}
+
+    \begin{itemize}
+        \item PyMCによるNUTSサンプリング
+        \item 1,500回サンプリング（tune=500, draws=1,000）
+    \end{itemize}
+
+    \vspace{3mm}
+
+    \textbf{データ仕様}:
+    \begin{itemize}
+        \item 対象時期: 中期（146遺跡、15,449点の黒曜石）
+        \item 説明変数: 標高（平均値・標準偏差で標準化）
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{推定結果: 回帰係数}
+    \textbf{標高効果の産地別差異}:
+
+    \begin{table}
+        \centering
+        \begin{tabular}{l|rr|r}
+            \hline
+            産地 & $\beta_0$ (切片) & $\beta_1$ (標高) & 実観測比率 \\
+            \hline
+            神津島 & $-0.000$ & $-3.354$ & 66.4\% \\
+            信州 & $0.002$ & $0.542$ & 29.9\% \\
+            箱根 & $-0.001$ & $-0.074$ & 2.9\% \\
+            \hline
+            \multicolumn{3}{l}{高原山（基準カテゴリ）} & 0.8\% \\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    \vspace{3mm}
+
+    \textbf{解釈}:
+    \begin{itemize}
+        \item \textbf{神津島}: 標高上昇により比率は大幅減少（$\beta_1 = -3.354$）
+        \item \textbf{信州}: 標高上昇により比率増加（$\beta_1 = 0.542$）
+        \item \textbf{箱根}: 標高効果は軽微（$\beta_1 = -0.074$）
+    \end{itemize}
+
+    この結果は考古学的知見とも近いとはいえる 神津島産黒曜石は沿岸部・低地での利用が中心、信州産は内陸・山地での利用が多い。
+\end{frame}
+
+\begin{frame}{推定結果: 産地構成比}
+    \begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_神津島.png}
+        \label{fig:sigma300}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_信州.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_箱根.png}
+        \label{fig:sigma1000}
+    \end{subfigure}
+        \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_高原山.png}
+        \label{fig:sigma1500}
+    \end{subfigure}
+\end{figure}
+\end{frame}
+
+\begin{frame}{モデル評価と他手法との比較}
+   \textbf{比較するモデル}:
+    \begin{itemize}
+        \item 線形回帰モデル
+        \item Nadaraya-Watsonモデル
+        \item Multinomial KSBPモデル
+    \end{itemize}
+
+    \vspace{5mm}
+
+    \textbf{結果}：
+    \begin{table}
+        \centering
+        \begin{tabular}{l|cc}
+            \hline
+            Model & Aitchison Distance & Total Variation \\
+            \hline
+            線形回帰 & 11.47 & 136.82 \\
+            \textbf{NW} & \textbf{9.34} & \textbf{92.13} \\
+            KSBP & 9.85 & 103.24 \\
+            \hline
+        \end{tabular}
+    \end{table}
+
+    \vspace{3mm}
+    →当然線形回帰は一番性能が悪かった。
+
+    \vspace{3mm}
+    この線形回帰から出発して、空間効果を入れるなどの拡張を増やしていき、最終的に、解釈しやすく、かつNadaraya-Watsonより予測精度が高いモデルを開発したい。
+
+\end{frame}
+
+\begin{frame}
+\frametitle{データとコード}
+
+\url{https://github.com/ARUOHTA/bayesian_statistics}
+
+\end{frame}
+
+\bibliographystyle{unsrt} %参考文献出力スタイル
+\bibliography{reference}
+
+\end{document}

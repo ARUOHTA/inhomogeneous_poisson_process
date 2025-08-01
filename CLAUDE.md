@@ -88,3 +88,10 @@ uv sync
 3. 第3版: 地形を考慮したトブラー距離の導入
 4. 第4版: さらなる改良
 5. KSBP版: より柔軟なノンパラメトリックベイズアプローチ
+
+## Banerjee-Carlin-Gelfand 書籍翻訳プロジェクト
+Banerjee, Carlin, and Gelfandの「Hierarchical Modeling and Analysis for Spatial Data」の各章を詳細な日本語要約として作成する際は、必ず以下の手順書を参照すること：
+
+**翻訳手順書の場所**: `/home/ohta/dev/bayesian_statistics/docs/banerjee_carlin_gelfand/INSTRUCTION.md`
+
+各章の翻訳を開始する前に、必ずINSTRUCTION.mdを読み、定められた手順と方針に従うこと。
