@@ -1,0 +1,160 @@
+% !TEX program = pdflatex
+\documentclass[dvipdfmx,11pt]{beamer}
+
+% Theme
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+
+% Packages
+\usepackage{amsmath, amssymb, bm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{mathtools}
+\usepackage{physics}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% Title
+\title[Multinomial KSBP]{Kernel Stick-Breaking Process と\newline 空間多項データへの拡張}
+\author[太田]{太田}
+\institute[]{Bayesian Statistics Project}
+\date{\today}
+
+% Bibliography
+\bibliographystyle{apalike}
+
+\begin{document}
+
+% Title page
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% Agenda
+\begin{frame}{アジェンダ}
+  \tableofcontents
+\end{frame}
+
+\section{背景と目的}
+\begin{frame}{背景}
+  \begin{itemize}
+    \item 黒曜石の\textbf{産地構成比}を地理位置に依存して推定したい
+    \item 頻度論の\textbf{Nadaraya–Watson (NW)} はシンプルだが不確実性表現が限定的
+    \item \textbf{Kernel Stick-Breaking Process (KSBP)} による\textbf{ノンパラメトリック・ベイズ回帰}を導入
+  \end{itemize}
+\end{frame}
+
+\section{KSBPの定義}
+\begin{frame}{設定}
+  説明変数 $x \in \mathcal X$ に依存する確率測度族 $\{G_x\}$ を考える．
+  \begin{equation*}
+    f(y\mid x) = \int f(y\mid x, \phi)\, dG_x(\phi)
+  \end{equation*}
+  目的は $\{G_x\}$ に\textbf{柔軟な事前分布}を与えること（Dunson \\& Park, 2008）．
+\end{frame}
+
+\begin{frame}{KSBPの構成}
+  独立な無限列 $\{\Gamma_h, V_h, G_h^*\}_{h=1}^\infty$ を導入：
+  \begin{itemize}
+    \item $\Gamma_h \sim H$：位置（カーネル中心）
+    \item $V_h \sim \mathrm{Beta}(a_h,b_h)$：スティック長
+    \item $G_h^* \sim Q$：混合成分の基準測度
+  \end{itemize}
+  \vspace{0.5em}
+  \begin{block}{定義（KSBP）}
+    \begin{align*}
+      G_x
+      &= \sum_{h=1}^\infty \pi_h(x)\, G_h^*, \\
+      \pi_h(x)
+      &= W_h(x) \prod_{\ell<h}\bigl[1-W_\ell(x)\bigr], \\
+      W_h(x)
+      &= V_h\, K(x,\Gamma_h),\quad K: \mathcal X\times\mathcal L \to [0,1].
+    \end{align*}
+  \end{block}
+  $K$ は距離減衰を与えるカーネル（例：RBF）．
+\end{frame}
+
+\begin{frame}{特別な場合}
+  \begin{itemize}
+    \item $K(x,\Gamma)\equiv 1$ なら $G_x\equiv G$：Dirichlet過程のstick-breakingを再現
+    \item $G_h^*=\delta_{\theta_h}$ で離散混合：標準的なDP混合に一致
+    \item $\{a_h,b_h\}$ の設定でPitman–Yor等も包含
+  \end{itemize}
+\end{frame}
+
+\section{Multinomial-KSBP}
+\begin{frame}{空間多項データへの拡張}
+  \begin{itemize}
+    \item 各クラスタ $h$ に多項パラメータ $\bm{\theta}_h \sim \mathrm{Dir}(\gamma_0/K,\dots)$ を割当
+    \item 位置 $s$ での産地比 $\bm{\pi}(s)=\sum_{h=1}^\infty \pi_h(s)\, \bm{\theta}_h$
+    \item 観測：$\bm{y}_i\mid s_i \sim \mathrm{Multinomial}(N_i,\bm{\pi}(s_i))$
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{推論（概略）}
+  \begin{itemize}
+    \item $\bm{\theta}_h\mid \{z_i,\bm{y}_i\}$：\textbf{Dirichlet} による更新
+    \item $z_i$（クラスタ割当）：未規格化重み $w_{ih}=\pi_h(s_i)\prod_k \theta_{hk}^{y_{ik}}$ からカテゴリカル
+    \item $V_h$：\textbf{slice sampling}（Walker, 2007）でBeta更新
+    \item $\Gamma_h$：ランダムウォークMH（カーネル中心の更新）
+  \end{itemize}
+\end{frame}
+
+\section{実装と設定}
+\begin{frame}{実装場所（本リポジトリ）}
+  \begin{itemize}
+    \item 実装：\texttt{bayesian\_statistics/models/composition/ksbp.py}
+    \item 設定：\texttt{bayesian\_statistics/models/config/model\_config.py}（\texttt{ksbp\_...} パラメータ）
+    \item ノートブック：\texttt{notebooks/20\_model\_KSBP.ipynb}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{ハイパーパラメータ例}
+  \begin{itemize}
+    \item カーネル幅（座標・コスト・標高・方位・河川）
+    \item Stick尺度 $\lambda$，Dirichlet集中度 $\gamma_0$，トランケーション $J_{\max}$
+    \item 反復 $N$，バーンイン，シードなど
+  \end{itemize}
+\end{frame}
+
+\section{結果のイメージ}
+\begin{frame}{結果（要約）}
+  \begin{itemize}
+    \item 位置依存の\textbf{後分布平均}と\textbf{標準偏差}により不確実性を可視化
+    \item \textbf{データ稀薄領域での分散増大}がNWより適切に表現
+    \item 図は \texttt{docs/0701\_presentation\_draft.tex} の該当スライド参照
+  \end{itemize}
+\end{frame}
+
+\section{NWとの比較}
+\begin{frame}{NW vs KSBP}
+  \begin{itemize}
+    \item \textbf{NW}: 平滑化の強さは帯域幅依存，不確実性の扱いが限定的
+    \item \textbf{KSBP}: 混合による柔軟な形状，\textbf{完全なベイズ的不確実性}の定量化
+    \item モデル選択や比較はLOOCV/WAIC等で検討（実装済）
+  \end{itemize}
+\end{frame}
+
+\section{まとめ}
+\begin{frame}{まとめと今後}
+  \begin{itemize}
+    \item KSBPを空間多項データへ拡張し，産地構成比の不確実性を評価
+    \item 特徴量を併用したKSBP（座標以外のカーネル）で精度向上余地
+    \item NNGP/GP系モデルとのベンチマーク，スライス＋MHの効率化
+  \end{itemize}
+\end{frame}
+
+\section*{参考文献}
+\begin{frame}{参考文献}
+\small
+\begin{thebibliography}{9}
+\bibitem[Dunson and Park, 2008]{Dunson2008-dg}
+  Dunson, D. B. and Park, J. H. (2008).
+  Kernel stick-breaking processes.
+  \emph{Biometrika}, 95(2), 307--323.
+\end{thebibliography}
+\end{frame}
+
+\end{document}

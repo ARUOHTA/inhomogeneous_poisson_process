@@ -178,44 +178,51 @@ class ObsidianVisualizer(BaseVisualizer):
         y = df[y_col].to_numpy()
         z = df[value_col].to_numpy()
 
-        # 海のマスクを作成（zが0またはnanの場合は海とみなす）
-        mask = (z == 0) | np.isnan(z)
+        # 海のマスクを作成
+        # is_sea カラムがあればそれを優先。なければ z==0 or NaN を海扱い。
+        if "is_sea" in df.columns:
+            sea_flat = df["is_sea"].to_numpy().astype(bool)
+        else:
+            sea_flat = (z == 0) | np.isnan(z)
 
         # グリッドのサイズを取得
         x_unique = np.unique(x)
         y_unique = np.unique(y)
         X, Y = np.meshgrid(x_unique, y_unique)
 
-        # Zを2D配列に変換
+        # Z（値）と M（海マスク）を2D配列に変換
         Z = np.full(X.shape, np.nan)
+        M = np.zeros(X.shape, dtype=bool)
         for i, row in enumerate(df.iter_rows()):
-            x_val, y_val, z_val = (
-                row[df.get_column_index(x_col)],
-                row[df.get_column_index(y_col)],
-                row[df.get_column_index(value_col)],
-            )
+            x_val = row[df.get_column_index(x_col)]
+            y_val = row[df.get_column_index(y_col)]
+            z_val = row[df.get_column_index(value_col)]
             xi = np.where(x_unique == x_val)[0][0]
             yi = np.where(y_unique == y_val)[0][0]
             Z[yi, xi] = z_val
+            M[yi, xi] = bool(sea_flat[i])
+
+        # 海は塗らない（NaN）
+        Z = np.where(M, np.nan, Z)
 
         # プロット作成
         fig, ax = plt.subplots(figsize=figsize)
 
-        # 確率プロットの場合は0-1の範囲を使用
+        # コンターのレベル設定
         if plot_probability:
             levels = np.linspace(0, 1, n_levels)
         else:
-            valid_z = z[~mask]
-            if len(valid_z) > 0:
-                levels = np.linspace(valid_z.min(), valid_z.max(), n_levels)
+            valid = Z[~np.isnan(Z)]
+            if valid.size > 0:
+                levels = np.linspace(np.nanmin(valid), np.nanmax(valid), n_levels)
             else:
                 levels = np.linspace(0, 1, n_levels)
 
         # コンター図を描画
         contour = ax.contourf(X, Y, Z, levels=levels, cmap=cmap, extend="both")
 
-        # 海の部分を灰色で塗りつぶし
-        sea_mask = np.isnan(Z) | (Z == 0)
+        # 海の部分を灰色で塗りつぶし + 海岸線を黒で描画
+        sea_mask = np.isnan(Z) | M
         ax.contourf(
             X,
             Y,
@@ -224,6 +231,17 @@ class ObsidianVisualizer(BaseVisualizer):
             colors=["lightgray"],
             alpha=0.7,
         )
+        try:
+            ax.contour(
+                X,
+                Y,
+                sea_mask.astype(float),
+                levels=[0.5],
+                colors="black",
+                linewidths=0.6,
+            )
+        except Exception:
+            pass
 
         # カラーバーを追加
         cbar = plt.colorbar(contour, ax=ax)
@@ -505,7 +523,7 @@ class ObsidianVisualizer(BaseVisualizer):
             ax.scatter(
                 period_sites["経度"].to_numpy(),
                 period_sites["緯度"].to_numpy(),
-                c="red",
+                c="blue",
                 s=60,
                 marker="o",
                 alpha=alpha,

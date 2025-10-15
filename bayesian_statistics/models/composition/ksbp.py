@@ -23,6 +23,11 @@ class KSBPModel(BaseCompositionModel):
         variable_names: List[str],
         kappa_coords: float = 0.002,
         kappa_costs: float = 2.0,
+        # 個別コスト用（未指定なら kappa_costs を使用）
+        kappa_costs_kouzu: Optional[float] = None,
+        kappa_costs_shinshu: Optional[float] = None,
+        kappa_costs_hakone: Optional[float] = None,
+        kappa_costs_takahara: Optional[float] = None,
         kappa_elevation: float = 10000.0,
         kappa_angle: float = 3.0,
         kappa_river: float = 2.0,
@@ -64,6 +69,10 @@ class KSBPModel(BaseCompositionModel):
         self.variable_names = variable_names
         self.kappa_coords = kappa_coords
         self.kappa_costs = kappa_costs
+        self.kappa_costs_kouzu = kappa_costs_kouzu
+        self.kappa_costs_shinshu = kappa_costs_shinshu
+        self.kappa_costs_hakone = kappa_costs_hakone
+        self.kappa_costs_takahara = kappa_costs_takahara
         self.kappa_elevation = kappa_elevation
         self.kappa_angle = kappa_angle
         self.kappa_river = kappa_river
@@ -124,14 +133,45 @@ class KSBPModel(BaseCompositionModel):
         ell = np.array([self.kappa_coords, self.kappa_coords])  # lat, lon
 
         for var_name in self.variable_names:
-            if "elevation" in var_name:
+            vn = var_name.lower()
+            if "elevation" in vn:
                 ell = np.append(ell, self.kappa_elevation)
-            elif "angle" in var_name:
+            elif "angle" in vn:
                 ell = np.append(ell, self.kappa_angle)
-            elif "cost" in var_name:
-                ell = np.append(ell, self.kappa_costs)
-            elif "river" in var_name:
+            elif "river" in vn and "cost" in vn:
+                # 明示的に river cost
                 ell = np.append(ell, self.kappa_river)
+            elif "cost_kouzu" in vn:
+                ell = np.append(
+                    ell,
+                    self.kappa_costs_kouzu
+                    if self.kappa_costs_kouzu is not None
+                    else self.kappa_costs,
+                )
+            elif "cost_shinshu" in vn:
+                ell = np.append(
+                    ell,
+                    self.kappa_costs_shinshu
+                    if self.kappa_costs_shinshu is not None
+                    else self.kappa_costs,
+                )
+            elif "cost_hakone" in vn:
+                ell = np.append(
+                    ell,
+                    self.kappa_costs_hakone
+                    if self.kappa_costs_hakone is not None
+                    else self.kappa_costs,
+                )
+            elif "cost_takahara" in vn:
+                ell = np.append(
+                    ell,
+                    self.kappa_costs_takahara
+                    if self.kappa_costs_takahara is not None
+                    else self.kappa_costs,
+                )
+            elif "cost" in vn:
+                # その他のコストがあればデフォルト
+                ell = np.append(ell, self.kappa_costs)
             else:
                 ell = np.append(ell, 1.0)
 

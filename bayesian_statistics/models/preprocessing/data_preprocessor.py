@@ -61,18 +61,21 @@ class ObsidianDataPreprocessor:
         }
     )
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, scale_variables: bool = False):
         """
         Parameters
         ----------
         data_dir : str
             データディレクトリのパス
+        scale_variables : bool, optional
+            説明変数を標準化するかどうか
         """
         self.data_dir = data_dir
         self._df_elevation: Optional[pl.DataFrame] = None
         self._df_obsidian: Optional[pl.DataFrame] = None
         self._df_sites: Optional[pl.DataFrame] = None
         self._grid_info: Optional[Dict[str, float]] = None
+        self.scale_variables = scale_variables
 
     def load_data(self) -> Dict[str, pl.DataFrame]:
         """
@@ -294,6 +297,13 @@ class ObsidianDataPreprocessor:
             .to_numpy()
             .astype(np.float64)
         )
+
+        if self.scale_variables and W_grids.size and W_sites.size:
+            mean = np.nanmean(W_sites, axis=0)
+            std = np.nanstd(W_sites, axis=0, ddof=0)
+            std = np.where(std == 0.0, 1.0, std)
+            W_sites = (W_sites - mean) / std
+            W_grids = (W_grids - mean) / std
 
         return W_grids, W_sites
 

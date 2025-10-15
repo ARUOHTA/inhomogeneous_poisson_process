@@ -1,0 +1,689 @@
+\documentclass[xelatex, 8pt]{beamer}
+\mode<presentation>{\usetheme{Dresden}}
+% Boadilla
+\usecolortheme[RGB={22, 74, 132}]{structure}
+%\usefonttheme{professionalfonts}
+
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+%\renewcommand{\familydefault}{\sfdefault}
+
+% IPAexMincho
+% Noto Serif CJK JP
+
+\usepackage{tikz}
+\usetikzlibrary{intersections, calc, arrows.meta}
+
+%seagullいいね
+%
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{subcaption}  %図を横に配置してそれぞれにキャプションを追加
+
+% 定理環境で使う言葉を用意
+\theoremstyle{plain}
+\newtheorem{thm}{Theorem}
+\newtheorem*{thm*}{Theorem}
+
+\theoremstyle{definition}
+\newtheorem{dfn}{Definition}
+
+% フォントサイズの設定
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subbody}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subsubbody}{size=\normalsize}
+
+% リンクに関するセットアップ
+\usepackage{url}
+
+\usepackage[dvipdfmx]{color, hyperref}
+\usepackage{cite}
+
+% beamerではなぜかこれが必要らしい
+%\hypersetup{pdfborder={0 0 1}}
+\usepackage{xcolor}
+\hypersetup{
+  colorlinks=true,
+  citecolor=blue,
+  linkcolor=red,
+  urlcolor=orange,
+}
+
+%ページ番号
+\setbeamertemplate{footline}[frame number]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Metadata %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\hypersetup
+{
+  %Separate multiple authors by comma
+  pdfauthor={},
+  pdftitle={Exact Bayesian Model for Non-Homogeneous Poisson Processes and Its Application to Obsidian Data},
+  pdfsubject={},
+  pdfkeywords={},
+  colorlinks=false
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Title related %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title[Contact: Aru Ohta (otaru1214@gmail.com)]{空間的多項カウントデータに対するノンパラメトリックベイズ統計手法}
+\subtitle{Bayesian nonparametric methods for spatial multinomial count data}
+\date[2025]{2025-9-11}
+\author[Aru Ohta]{太田阿留\inst{1} \and 原尚幸\inst{2} \and 津村宏臣\inst{3}}
+\institute[Kyoto University]{\inst{1} 京都大学情報学研究科 \and \inst{2} 京都大学国際高等教育院 \and \inst{3} 同志社大学文化情報学部}
+
+\begin{document}
+
+\frame{\titlepage}
+
+% 本研究の貢献（short向けの要約）
+\begin{frame}{本研究の貢献 Contributions}
+  \begin{itemize}
+    \item ノンパラメトリックベイズ手法の一つであるKernel Stick-Breaking Process (KSBP)モデルを拡張し、\textbf{空間上に分布する多項カウントデータに対するモデル}を提案
+    \item スライスサンプリングを組み込んだ効率的なギブスサンプラーによる推定方法を提案
+    \item 黒曜石の産地構成比データに適用
+  \end{itemize}
+\end{frame}
+
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents
+\end{frame}
+
+\section{背景と目的}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{問題の定式化：空間多項ロジスティック回帰}
+
+まず、
+
+\[
+\mathcal{S}\subset\mathbb{R}^2,\quad
+\mathcal{X}\subset\mathbb{R}^p,\quad
+\Delta^{K-1}:=\{\boldsymbol{\pi}\in[0,1]^K:\ \sum_{k=1}^K \pi_k=1\}.
+\]
+
+と定義する。ここで、$\mathcal{S}$は一般に地理空間、$\mathcal{X}$は独立変数の空間、$\Delta^{K-1}$は$K-1$次元の単体である。
+
+\vspace{3mm}
+
+観測データ：$s_i \in \mathcal{S} \quad i = 1, \ldots ,n$ において、
+
+\vspace{2mm}
+\begin{itemize}
+    \item 独立変数： $x_i\in\mathbb{R}^p$
+    \item 従属変数：$K$ 次元の非負整数ベクトル $y_i\in\mathbb{N}^K$
+\end{itemize}
+\vspace{2mm}
+
+を観測するとする。これらの観測データを元に、回帰関数
+
+\[
+\pi:\ \mathcal{S}\times\mathcal{X}\ \to\ \Delta^{K-1},\qquad
+(s,x)\ \mapsto\ \pi(s,x).
+\]
+
+を推定することを考える。
+
+\end{frame}
+
+\begin{frame}{問題の定式化：空間多項ロジスティック回帰}
+
+この回帰関数の出力$\pi(s_i,x_i)$と観測された従属変数$y_i$をつなぐ観測モデルは、固定された $N_i=\sum_{k=1}^K y_{ik}$に対し
+\[
+  y_i \mid N_i,\ \pi(s_i,x_i)\ \sim\ \mathrm{Multinomial}\bigl(N_i,\ \pi(s_i,x_i
+)\bigr)
+\]
+と、多項分布に独立に従っている、とするのが自然である。
+
+\vspace{3mm}
+
+→\textbf{空間的にパラメータが変化する多項ロジスティック回帰}
+
+\vspace{3mm}
+
+近接する地点では $\pi$ が連続的に変化するような仮定のもとで、$\pi$の推定手法を考える
+
+\end{frame}
+
+\begin{frame}{応用例：黒曜石の産地構成比データ}
+    \begin{itemize}
+        \item 特に旧石器時代から縄文時代にかけて、石器を作るための材料として使用されてきた\textbf{黒曜石(Obsidian)}のデータ
+        \item 黒曜石は原産地が限られており、さまざまな遺跡から、それぞれの原産地の黒曜石が出土している。
+    \end{itemize}
+
+    \begin{figure}
+        \centering
+        % 画像が存在する場合のみ読み込み（無い場合はコンパイル継続）
+        \IfFileExists{fig/obsedian.png}{\includegraphics[width=0.3\linewidth]{fig/obsedian.png}}{\fbox{obsedian.png}}
+        \caption{黒曜石原石(前18,000年)。\href{https://bunka.nii.ac.jp/heritages/detail/515934}{文化遺産オンライン}より引用。}
+        \label{fig:enter-label}
+    \end{figure}
+
+\end{frame}
+
+\begin{frame}{応用例：黒曜石の産地構成比データ}
+
+\begin{table}[t]
+    \centering
+    \scriptsize
+    \setlength{\tabcolsep}{2.5pt}
+    \caption{黒曜石データにおける独立変数と従属変数の例}
+    \begin{tabular}{lrrrrrrrrr|rrrr}
+    \hline
+    \multicolumn{10}{c|}{独立変数（立地・コスト）} & \multicolumn{4}{c}{従属変数（カウント）} \\
+    \hline
+    遺跡名 & 経度 & 緯度 & 標高[m] & 傾斜[°] & 信州まで & 神津島まで & 箱根まで & 高原山まで & 河川まで & 信州 & 神津島 & 箱根 & 高原山 \\
+    \hline
+    上谷津第2 & 140.2516 & 35.6240 & 38.0 & 3.0 & 4089 & 3776 & 2112 & 2674 & 15 & 23 & 29 & 0 & 2 \\
+    八幡脇     & 140.2547 & 36.0823 & 24.7 & 0.8 & 3414 & 4403 & 2738 & 1983 & 13 & 6  & 10 & 0 & 0 \\
+    陸平貝塚   & 140.3484 & 36.0177 & 23.2 & 3.3 & 3601 & 4401 & 2736 & 2171 & 24 & 0  & 53 & 0 & 0 \\
+    後野Ａ     & 140.5578 & 36.3948 & 21.0 & 0.9 & 3627 & 5174 & 3510 & 1935 & 10 & 0  & 0  & 0 & 0 \\
+    粟島台     & 140.8391 & 35.7177 & 11.0 & 1.5 & 4525 & 4512 & 2847 & 3095 & 3  & 4  & 70 & 0 & 0 \\
+    \multicolumn{1}{c}{$\vdots$} & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ & $\vdots$ \\    \hline
+    \end{tabular}
+    \par\smallskip
+    \begin{minipage}{0.96\textwidth}\footnotesize
+    注）距離はコスト距離（単位は解析に依存）
+    \end{minipage}
+  \end{table}
+
+\end{frame}
+
+\begin{frame}{応用例：黒曜石の産地構成比データ}
+
+\begin{figure}
+        \centering
+        \includegraphics[width=1\linewidth]{fig/独立変数.png}
+        \caption{黒曜石データにおける独立変数の例}
+        \label{fig:placeholder}
+    \end{figure}
+\end{frame}
+
+\section{先行研究}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{先行研究: 概要}
+
+  本節では、位置$s$と独立変数 $x$ に依存する予測分布
+  \[
+    f(y\mid s, x) = \int f(y\mid s, x,\,\phi)\, dG_{s, x}(\phi)
+  \]
+  をノンパラメトリックに表現するための\,\emph{測度 $G_x$ に対する事前分布}の設計の仕方を考える。
+
+  \vspace{3mm}
+
+  有限次元の基本形（有限分割上の離散測度）から出発し、Dirichlet 過程（DP）による無限次元への拡張、さらに Kernel Stick-Breaking Process（KSBP）による $x$ 依存（局所化）へと段階的に拡張する流れで説明する。
+\end{frame}
+
+\begin{frame}{1. 有限の場合：Dirichlet}
+
+パラメータ空間の有限分割 \(B_1,\dots,B_K\) に対し、確率ベクトル \(\boldsymbol p=(p_1,\dots,p_K)\in\Delta^{K-1}\) を用いて離散測度 \(G\) を
+\[
+  G(B_k)=p_k,\qquad k=1,\dots,K
+\]
+と定義する。このとき \(\boldsymbol p\sim\mathrm{Dir}(\alpha_1,\dots,\alpha_K)\) は \(G\)（測度）への事前分布である。
+
+\vspace{2mm}
+観測カウント \(\boldsymbol n=(n_1,\dots,n_K)\) に対し、事後は \(\boldsymbol p\mid\text{data}\sim\mathrm{Dir}(\alpha_1+n_1,\dots,\alpha_K+n_K)\) となる。
+
+\vspace{2mm}
+
+
+\end{frame}
+
+\begin{frame}{2. Dirichlet過程（DP）}
+  \textbf{Dirichlet過程 (DP)} は、有限の場合を拡張し、任意の有限分割に対して比率を割り当てられるように、確率測度 $G$ に対する事前分布を定めたもの。
+
+\begin{block}{定義（Ferguson, 1973）}
+$G \sim \mathrm{DP}(\alpha G_0)$ は、任意の有限分割 $B_1, \dots, B_k$ に対し：
+\[
+(G(B_1), \dots, G(B_k)) \sim \mathrm{Dir}(\alpha G_0(B_1), \dots, \alpha G_0(B_k))
+\]
+\end{block}
+
+\vspace{1em}
+\textbf{Stick-breaking表現（Sethuraman, 1994）}により、$G$は次のように構成可能：
+\[
+G = \sum_{h=1}^\infty p_h \delta_{\theta_h}, \quad
+p_h = V_h \prod_{l=1}^{h-1}(1 - V_l)
+\]
+\begin{itemize}
+    \item $V_h \sim \mathrm{Beta}(1, \alpha)$
+    \item $\theta_h \sim G_0$
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{3. KSBPの定義：位置に依存する測度の設計}
+  (共変量については簡単のため表記を省略する)
+
+  \vspace{2mm}
+
+  位置ベクトル $\boldsymbol{s}\in\mathcal{S}\subset\mathbb{R}^2$ ごとに測度の族 ${G_{\boldsymbol{s}}}$ を構成する。これをStick-Breaking表現で考えたのがDunson and Park (2008)\cite{Dunson2008-dg}のKernel Stick-Breaking Process (KSBP)である。DPの原子（成分）を共有しつつ、
+  重みのみを $\boldsymbol{s}$ に依存させて局所性を与えている。
+
+  \[
+  G_{\boldsymbol{s}} := \sum_{h=1}^{\infty} \pi_h(\boldsymbol{s}),\delta_{\theta_h},
+  \qquad
+  W_h(\boldsymbol{s}) := V_h,K(\boldsymbol{s},\Gamma_h),
+  \qquad
+  \pi_h(\boldsymbol{s}) := W_h(\boldsymbol{s}) \prod_{\ell < h}!\bigl(1 - W_\ell(\boldsymbol{s})\bigr)
+  \]
+
+  \[
+  V_h \sim \mathrm{Beta}(1,\lambda),\quad
+  \Gamma_h \sim H,\quad
+  \theta_h \sim G_0,\quad
+  K:\mathcal{S}\times\mathcal{S}\to[0,1]\ \text{（例：RBF）}
+  \]
+
+  ここで$H$は$\mathcal{S}$上の確率分布（一様分布がよく使われる）ため、$\Gamma_h \in \mathcal{S}$である。
+
+\vspace{2mm}
+  例えば、この構成で各 $\boldsymbol{s}$ に対し $\sum_{h}\pi_h(\boldsymbol{s})=1$ が成り立ち、$K(\boldsymbol{s},\Gamma)\equiv 1$ とすれば $
+  \pi_h(\boldsymbol{s})$ は $p_h$ に一致し $G_{\boldsymbol{s}}\equiv G$（DP）となる。\\
+
+  直観的には、$\Gamma_h$ 近傍では棒が良く折れて当該成分に重みが
+  集中し、遠方では重みが抑制される。
+\end{frame}
+
+
+\section{提案手法}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{Multinomial-KSBP}
+
+本説では、前節のKernel Stick-Breaking Processを空間データに応用して、産地構成比を推定するためのノンパラメトリックベイズモデルを考える。
+
+$K$個の非負整数の応答変数を持つため、これをMultinomial Kernel Stick-Breaking Processと呼ぶことにする。
+
+\end{frame}
+
+\begin{frame}{Multinomial-KSBP}
+観測空間 $\mathcal X\subset\mathbb R^{d}$ とし，KSBPと同様に、独立な無限列
+\[
+\{\Gamma_h,\;V_h,\;G_h^{*}\}_{h=1}^{\infty}
+\]
+を導入する．
+
+\vspace{0.5em}
+それぞれの事前分布を以下のようにする：
+\[
+\Gamma_h\sim H,\qquad
+V_h\sim\operatorname{Beta}(a_h,b_h),\qquad
+G_h^* \sim Q
+\]
+
+\vspace{0.5em}
+ここで：
+\begin{itemize}
+  \item $\Gamma_h$ ：空間的位置。$H$は観測空間内の一様分布とする。
+  \item $V_h$ ：stick-breaking の比率
+  \item $G_h^*$ ：混合成分
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Multinomial-KSBP}
+空間的局所性を反映するため，カーネル関数 $K:\mathcal X\times\mathcal X\to[0,1]$ を導入し，以下のように重みを定義：
+
+\[
+W_h(x) = V_h\,K(x,\Gamma_h)
+\]
+ここでも、ガウスカーネルを利用する：
+\[
+K(x,\Gamma) = \exp\!\left\{-\frac{\|x - \Gamma\|^2}{2h^2}\right\}
+\]
+
+\vspace{1em}
+これを用いて，$x$ における stick-breaking 重みを以下で構成する：
+\[
+\pi_h(x) = W_h(x)\prod_{l < h}[1 - W_l(x)], \quad h=1,2,\dots
+\]
+
+\vspace{0.5em}
+このとき，$\sum_h \pi_h(x) = 1$ はほとんどいたるところで成り立つ。
+\end{frame}
+
+\begin{frame}{Multinomial-KSBP}
+KSBPと同様に、$x$ に依存する確率測度 $G_x$ を以下で定義する：
+
+\[
+G_x = \sum_{h=1}^{\infty} \pi_h(x)\,G_h^*
+\]
+
+\begin{itemize}
+  \item $\pi_h(x)$：空間位置 $x$ に依存した重み
+  \item $G_h^*$：クラスタ $h$ に対応する測度
+\end{itemize}
+
+\vspace{1em}
+この構成により，$G_x$ は場所ごとに異なる分布を持つランダム測度となる。
+\end{frame}
+
+\begin{frame}{Multinomial-KSBP}
+クラスタhにおける混合成分は、ディリクレ分布から生成される確率ベクトルの値を確率１でとるものとする。直感的には、$\theta_h$ は、$\Gamma_h$を中心とするクラスタhにおける産地構成比を表す。
+
+\[
+\theta_h \mid \gamma_0 \sim
+\operatorname{Dirichlet}\left(\tfrac{\gamma_0}{K},\dots,\tfrac{\gamma_0}{K}\right),
+\quad
+G_h^* = \delta_{\theta_h}
+\]
+
+\vspace{0.5em}
+ここで、$\delta_{\theta_h}$はディラック測度。これにより，$G_x$ はカテゴリカル分布の加重平均として構成される。
+
+観測データ $\mathbf{y}_i \in \mathbb{N}^K$ は多項分布から生成されるとする：
+
+\[
+\pi(x) = \sum_{h=1}^{\infty} \pi_h(x)\,\theta_h
+\]
+\[
+\mathbf{y}_i \mid \pi(x_i) \sim \operatorname{Multinomial}(N_i,\; \pi(x_i))
+\]
+
+\end{frame}
+
+\begin{frame}{モデルの階層構造}
+\[
+\begin{aligned}
+\Gamma_h &\sim H, \\
+\quad V_h &\sim \operatorname{Beta}(1, \lambda), \\
+\theta_h &\sim \operatorname{Dirichlet}\left(\tfrac{\gamma_0}{K}\mathbf{1}_K\right), \\
+\pi_h(s) &= V_h K_h(s) \prod_{l < h} [1 - V_l K_l(s)], \\
+\pi(s) &= \sum_h \pi_h(s)\, \theta_h, \\
+\mathbf{y}_i \mid \pi(s_i) &\sim \operatorname{Multinomial}(N_i,\; \pi(s_i))
+\end{aligned}
+\]
+
+\end{frame}
+
+\begin{frame}{補助変数 \(\boldsymbol z=(z_1,\dots,z_n)\) の導入}
+\begin{itemize}
+%-------------------------------------------------
+\item
+      無限混合 \(\displaystyle\pi(s)=\sum_{h\ge1}\pi_h(s)\theta_h\) を
+      サンプリング可能な形に分解するために、補助変数として$z_i$を導入し、
+%-------------------------------------------------
+\item
+      各観測点 \(s_i\) について離散変数
+      \[
+        z_i \;\in\;\{1,2,\dots\},\qquad
+        \mathbb P(z_i=h\mid\mathbf V,\Gamma)
+        \;=\;\pi_h(s_i)
+      \]
+      と定義する。
+%-------------------------------------------------
+\item これによって、データ生成過程は
+      \[
+        %
+        z_i\mid \mathbf V,\Gamma,s_i \sim \mathrm{Categorical}\bigl(\pi_1(s_i),\pi_2(s_i),\dots\bigr)
+      \]
+      \[
+        \mathbf y_i \mid z_i,\{\theta_h\} \sim
+        \mathrm{Multinomial}\bigl(N_i,\;\theta_{z_i}\bigr).
+      \]
+      のように書き換えることができる。
+
+\end{itemize}
+\end{frame}
+
+\begin{frame}{モデルの階層構造}
+\[
+\begin{aligned}
+\Gamma_h &\sim H, \\
+V_h &\sim\operatorname{Beta}(1,\lambda),\\
+\theta_h &\sim\operatorname{Dirichlet}\!\Bigl(\tfrac{\gamma_0}{K}\mathbf 1_K\Bigr),
+& & \\
+\pi_h(s) &= V_h\,K(s,\Gamma_h)\!\!\prod_{l<h}\!\bigl[1-V_lK(s,\Gamma_l)\bigr],\\
+\pi(s) &= \sum_{h}\pi_h(s)\,\theta_h,\\
+z_i \mid s_i &\sim\mathrm{Categorical}\bigl(\pi_1(s_i),\pi_2(s_i),\dots\bigr), \\
+\mathbf y_i \mid z_i &\sim\mathrm{Multinomial}\!\bigl(N_i,\theta_{z_i}\bigr).
+\end{aligned}
+\]
+\end{frame}
+
+\begin{frame}{同時事後分布}
+\[
+\begin{aligned}
+& p\!\bigl(\{\Gamma_h\},\{V_h\},\{\theta_h\},
+           \mathbf z,\mathbf y \mid \mathbf s\bigr) \\
+&=
+   \prod_{h=1}^{\infty}
+     {%
+       H(\Gamma_h)\;
+       \mathrm{Beta}\!\bigl(V_h\mid 1,\lambda\bigr)\;
+       \mathrm{Dir}\!\Bigl(\theta_h\mid\tfrac{\gamma_0}{K}\mathbf 1_K\Bigr)
+     }
+   \times
+   \prod_{i=1}^{n}
+     {%
+       \mathrm{Cat}\!\bigl(z_i\mid\pi_1(s_i),\pi_2(s_i),\dots\bigr)
+       \mathrm{Mult}\!\bigl(\mathbf y_i\mid N_i,\theta_{z_i}\bigr)
+     } .
+\end{aligned}
+\]
+
+\[
+\pi_h(s) \;=\;
+  V_h\,K(s,\Gamma_h)\,
+  \prod_{l<h}\!\bigl[1-V_l K(s,\Gamma_l)\bigr],
+\quad
+\mathbf z=(z_1,\dots,z_n).
+\]
+\end{frame}
+
+\begin{frame}{\(\boldsymbol{\theta}_h\) の完全条件付き分布は Dirichlet 分布になる}
+
+$$
+\begin{aligned}
+P\left(\boldsymbol{\theta}_h \mid \mathbf{z}, \mathbf{y}\right) &\propto P\left(\boldsymbol{\theta}_h\right) \prod_{\hat{i}_i: z_i=h} P\left(\mathbf{y}_i \mid \boldsymbol{\theta}_h\right)
+\\
+& \propto \prod_{k=1}^K \theta_{h k}^{\frac{\pi}{K}-1+\sum_{n=i-h} y_{i k}} \\
+& =\operatorname{Dirichlet}\left(\frac{\gamma_0}{K}+S_{h 1}, \ldots, \frac{\gamma_0}{K}+S_{h K}\right),
+\end{aligned}
+$$
+
+$$
+S_{hk}\;:=\;\sum_{i:z_i=h} y_{ik},
+\qquad
+S_{h\cdot}=\sum_{k}S_{hk}.
+$$
+
+\end{frame}
+
+\begin{frame}{\(z_i\) の完全条件付き分布はカテゴリ分布になる}
+
+\[
+\begin{aligned}
+P(z_i=h \mid \text{rest})
+ &\;\propto\;
+    P(z_i=h \mid \mathbf V,\Gamma,s_i)\;
+    P(\mathbf y_i \mid z_i=h,\boldsymbol\theta_h) \\
+ &\;=\;
+    \pi_h(s_i)\;
+    \prod_{k=1}^{K}\theta_{hk}^{\,y_{ik}} .
+\end{aligned}
+\]
+
+\vspace{2pt}
+未規格化重みを
+\[
+ w_{ih}:=\pi_h(s_i)\,
+         \prod_{k}\theta_{hk}^{\,y_{ik}},\qquad h=1,2,\dots
+\]
+とおくと
+
+\[
+{%
+   P(z_i=h \mid \text{rest})=
+     \frac{w_{ih}}{\sum_{g}w_{ig}}
+   \;\;\;(\text{カテゴリ分布})}.
+\]
+
+となる。
+\end{frame}
+
+\begin{frame}{V\(_h\) のサンプリング: Slice Sampling}
+
+$V_h$のサンプリングは、Walker(2007)\cite{Walker2007-aj}のSlice samplingの手法に従って行う。
+
+Walker(2007)\cite{Walker2007-aj}によれば、スライスのための補助変数\; \(u_i\sim\text{Uniform}(0,1)\) を置き，
+\[
+u_i < \pi_{z_i}(s_i)
+      = V_{z_i} K(s_i,\Gamma_{z_i})
+        \prod_{g<z_i}(1-V_g K(s_i,\Gamma_g)).
+\]
+の不等式によって、無限個のうち有限個のクラスタのみを選べば、
+\[
+\begin{aligned}
+ m_h &= \#\{i : z_i = h\},\\
+ r_h &= \#\{i : z_i  > h,\;
+                u_i < V_h K(s_i,\Gamma_h)
+                \prod_{g<h}(1-V_g K(s_i,\Gamma_g))\}.
+\end{aligned}
+\]
+
+とおくことによって、
+\[
+V_h \mid \text{rest} \sim \text{Beta}(1+m_h,\; \lambda+r_h).
+\]
+が完全条件付き分布になることが知られている。
+
+\end{frame}
+
+\begin{frame}{位置パラメータ \(\Gamma_h\) はMH法で更新}
+\[
+\begin{aligned}
+p(\Gamma_h \mid \text{rest})
+   &\;\propto\;
+     H(\Gamma_h)\,
+     \prod_{i=1}^{n}
+         P(z_i,u_i \mid \Gamma_h, \text{rest}) \\
+   &\;\propto\;
+     H(\Gamma_h)\,
+     {\prod_{i:z_i=h}\pi_h(s_i)}
+     \;
+     {\prod_{i:z_i>h,\;u_i<\pi_h(s_i)}
+                     \bigl[1-\pi_h(s_i)\bigr]}
+\\
+   &\;\propto\;
+     H(\Gamma_h)\,
+     \prod_{i:z_i=h}K(s_i,\Gamma_h)\,
+     \prod_{i:z_i>h}
+       \bigl[1-K(s_i,\Gamma_h)\bigr]^{\mathbf 1\{u_i<\pi_h(s_i)\}}
+\end{aligned}
+\]
+
+\vspace{4pt}
+\begin{itemize}
+\item 解析形は得られないため、ランダムウォーク Metropolis-Hastings法 を採用。
+\item 提案分布： $\mathcal N(0,\sigma_\phi^{2}I_2)$
+\end{itemize}
+
+\end{frame}
+
+\section{黒曜石データでの実験}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{特徴量とカーネル}
+  \textbf{合成カーネルの例}（積型）：
+  \[
+    K(s,\Gamma)=\exp\Bigl(-\kappa_{\text{coord}}\,\|s-\Gamma\|^2\Bigr)\cdot
+    \exp\Bigl(-\kappa_{\text{cost}}\, d_{\text{cost}}(s,\Gamma)\Bigr)\cdot
+    \exp\Bigl(-\kappa_{\text{elev}}\, |e(s)-e(\Gamma)|\Bigr)\\
+    \cdot\exp\Bigl(-\kappa_{\text{angle}}\, \Delta\theta(s,\Gamma)\Bigr)\cdot
+    \exp\Bigl(-\kappa_{\text{river}}\, r(s,\Gamma)\Bigr)
+  \]
+  \begin{itemize}
+    \item $d_{\text{cost}}$：コスト距離、$e(\cdot)$：標高、$\Delta\theta$：方位差、$r$：河川距離
+    \item ハイパラ例：$\lambda$（stick尺度）、$\gamma_0$（Dir集中）、$J_{\max}$（打切り）
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{結果例}
+  \begin{figure}
+        \centering
+        % 画像が存在する場合のみ読み込み（無い場合はコンパイル継続）
+        \IfFileExists{fig/ratio_map_0_信州.png}{\includegraphics[width=0.8\linewidth]{fig/ratio_map_0_信州.png}}{\fbox{ratio_map_0_信州.png}}
+        \label{fig:enter-label}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{結果例}
+  \begin{figure}
+        \centering
+        % 画像が存在する場合のみ読み込み（無い場合はコンパイル継続）
+        \IfFileExists{fig/ratio_map_0_神津島.png}{\includegraphics[width=0.8\linewidth]{fig/ratio_map_0_神津島.png}}{\fbox{ratio_map_0_神津島.png}}
+        \label{fig:enter-label}
+    \end{figure}
+\end{frame}
+
+\section{比較とまとめ}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+% （依頼により削除）NWとの比較スライドは本発表の文脈外のため省略
+
+\begin{frame}{MCMC診断（概要）}
+  \begin{itemize}
+    \item 代表パラメータ（例：\(V_h\), \(\theta_{hk}\), 対数尤度）のトレースと自己相関
+    \item 収束指標：\(\hat R\), ESS、受理率（MH）と計算時間の要約
+  \end{itemize}
+  \begin{figure}
+    \centering
+    \IfFileExists{fig/mcmc_trace.png}{\includegraphics[width=0.75\linewidth]{fig/mcmc_trace.png}}{\fbox{mcmc\_trace.png}}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{定量評価（例）}
+  \begin{itemize}
+    \item 予測性能：LOOCV / WAIC / 事後予測対数尤度
+    \item キャリブレーション：予測比率 vs 観測比率
+    \item 事後予測チェック（PPC）：ヒストグラム／散布図
+  \end{itemize}
+  \begin{figure}
+    \centering
+    \IfFileExists{fig/ppc_scatter.png}{\includegraphics[width=0.7\linewidth]{fig/ppc_scatter.png}}{\fbox{ppc\_scatter.png}}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{まとめと今後}
+  \begin{itemize}
+    \item KSBPにより、位置に応じて混合重みが変化するモデルを構築し、黒曜石の産地構成比の空間的なゆらぎを柔軟に表現できた。
+    \item 事後分布に加えて事後標準偏差を示すことで、推定の確からしさを場所ごとに視覚的に伝えられるようになった。
+    \item とりわけ観測が少ない地域では不確実性が自然に大きくなり、過度な外挿を避ける挙動を確認した。
+  \end{itemize}
+  \vspace{0.8em}
+  \begin{itemize}
+    \item 座標以外の特徴（移動コスト・標高・方位・河川距離など）を組み込んだARD合成カーネルを整理し、解釈しやすい設定に整える。
+    \item スティック長の事前やトランケーション長などのハイパラを系統的に探索し、スライスサンプリング＋MHの提案分布も自動調整して計算を高速化する。
+    \item より広い領域や細かいグリッドへ適用を進めつつ、GPなどの代替手法と精度・不確実性・計算量の観点で比較・検証する。
+  \end{itemize}
+\end{frame}
+
+\end{document}
