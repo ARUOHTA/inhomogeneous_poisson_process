@@ -1,3 +1,14 @@
+<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js">
+</script>
+<script type="text/x-mathjax-config">
+ MathJax.Hub.Config({
+ tex2jax: {
+ inlineMath: [['$', '$'] ],
+ displayMath: [ ['$$','$$'], ["\\[","\\]"] ]
+ }
+ });
+</script>
+
 # 多項カウントデータに対する NNGP モデル
 
 本ドキュメントでは、黒曜石産地構成比のような多カテゴリカウントデータを扱うために構築した **Nearest-Neighbor Gaussian Process (NNGP) 多項ロジットモデル** を、モデル生成過程のレベルから詳細に記述する。`docs/model_description.md` の点過程モデルと同じ筆致で、生成モデル → 尤度 → 事前分布 → ギブスサンプラーの完全条件付き分布を順を追って導出する。

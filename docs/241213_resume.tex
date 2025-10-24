@@ -1,0 +1,377 @@
+%
+%このファイルは日本バーチャルリアリティ学会複合現実感研究会原稿用スタイルファイル
+%sigmr2e.sty(ver.1.0) を利用したサンプルファイルです。
+%
+\documentclass[a4paper,twoside,dvipdfmx]{jsarticle}  % dvipdfmxオプションを追加
+\usepackage[ipaex]{pxchfon}
+\usepackage{sigmr2e}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{dfn}{定義}[section]
+
+\usepackage[dvipdfmx]{graphicx}
+
+%和文タイトル　論文のヘッダ部分にも出力されます。　 
+\jtitle{
+    非斉次ポアソン過程の厳密なベイズモデルと黒曜石データへの応用
+}
+
+%著者日本名   
+\jauthor{
+    太田 阿留\thanks{京都大学情報学研究科}
+}
+
+%英文タイトル
+\etitle{
+    Exact Bayesian Model for Non-Homogeneous Poisson Processes and Its Application to Obsidian Data
+}
+
+%著者英文名
+\eauthor{
+    Aru Ohta\thanks{Graduate School of Informatics, Kyoto University}
+}
+
+%西暦(4桁まで)
+\YEAR{2024}
+\MONTH{12}
+
+
+%論文のヘッダにつける著者名
+\AUTHOR{太田 阿留}
+
+\def\MARU#1{{\rm\ooalign{\hfil\lower.168ex\hbox{#1}\hfil \crcr\mathhexbox20D}}}
+
+\begin{document}
+
+%maketitle は abstract と keyword の後に入れてください。
+
+\begin{abstract}
+黒曜石の流通パターンの解明は、縄文時代における人々の移動や交流の実態を把握する上で重要な手がかりとなる。本研究では、関東地方の224箇所の遺跡から出土した総計31,244点の黒曜石を対象とし、その産地構成比の時空間分布を統計的に推定する手法を提案する。
+
+まず予備分析として、ノンパラメトリック法による産地構成比の空間補間を実施した。さらに、より精緻な統計モデルとして、点過程に基づくアプローチを採用した。具体的には、遺跡の位置を非斉次ポアソン過程でモデル化し、産地別の出土数を点過程に付随する情報（マーク）として扱った。また、発掘調査が行われていない地点の存在を考慮し、観測バイアスを明示的にモデルに組み込んだ。本研究の主な貢献は、生態学における既存手法を基礎としつつ、これをカウントデータに対応したマーク付き点過程モデルへと拡張したこと、そして初めて点過程によるモデル化を黒曜石データに適用したことである。
+
+提案モデルの実装に向けて、MCMCアルゴリズムの構築、実データへの適用、モデルの評価方法の開発という課題が残されている。これらの課題に取り組むことで、黒曜石の産地構成比の時空間分布に関する新たな知見が得られることが期待される。
+\end{abstract}
+
+\begin{keyword}	
+Presence-onlyデータ、Species Distribution Modeling、点過程、時空間統計、ベイズ統計
+\end{keyword}
+
+\maketitle	
+
+\section{はじめに}
+
+\subsection{黒曜石の流通と交易システム}
+
+現生人類は約38,000年前から日本列島に移動し居住をしてきたが、中国からの漢字の伝播による文字の使用はおよそ2,000年前からのことである。そのため、この長期にわたる文字資料のない時代の人々の移動や生活を、実証的な方法で復元する方法論は限られており、遺跡から発掘される遺構や遺物が、ほぼ唯一の分析視点となる。
+
+黒曜石は、旧石器時代から縄文時代にかけて、石器を作るための優れた材料として使用されてきた。黒曜石の産出地は地理的に限定されているため、空間的な出土パターンを分析することで、その流通経路を追跡し、当時の人々の移動や交流の実態を推測することが可能である。
+
+縄文時代になると、黒曜石は広域的な流通システムの中で取引されるようになった。黒曜石は原産地の集落だけではなく、異なる集団間で広く流通するようになっていた。例えば、茅野市駒形遺跡では縄文時代前期の遺跡から55,325点もの黒曜石が出土し、そのうち分析された8,175点の約75％が諏訪系であることが判明しており、この遺跡が原産地から消費地への黒曜石の搬出入を担う拠点的な役割を果たしていたことを示している\cite{tsutsumi2018}。
+
+このような黒曜石の流通パターンと時空間的分布を定量的に解明することは、当時の居住システムと集団間の関係とその変化の過程を解明する重要な手がかりとなる。
+
+\subsection{研究の目的と方針}
+
+本研究は、黒曜石の産地構成比の時空間分布を、統計的アプローチによって定量的に推定することを目的とする。具体的には、観測地点以外の任意の地点における産地構成比の推定を可能とする統計モデルの構築を目指す。さらに、発掘調査に伴うサンプリングバイアスを補正するため、考古学的専門知識を統計モデルに組み込むための包括的なフレームワークを提案する。
+
+このような目的を達成するため、本研究では主に生態学分野への応用を目的として発展してきた統計的手法を利用する。特に、Species Distribution Modeling (SDM)という枠組みの中で広く利用されている点過程(Point Process)モデルを採用する。点過程モデルの枠組みにおいて、黒曜石のデータは在のみデータ(Presence-only data)として扱われる。このように、統計モデルに基づく黒曜石の時空間分布の解析は先行研究には存在しない。
+
+本論文の構成は以下の通りである。まず2章において黒曜石データの特徴について説明し、次に3章において点過程モデルによるpresence-onlyデータの解析について概説する。そして4章において本研究における提案手法について説明する。
+
+\section{黒曜石データ}
+
+\subsection{データの概要}
+
+本研究では、関東地方（北緯34-37度、東経138-141度）における224箇所の遺跡から出土した黒曜石のデータを分析対象とする。各遺跡について、遺跡名、位置情報（緯度・経度）、および出土した黒曜石の情報（時期、産地、点数）が記録されており、総出土数は31,244点である。
+
+出土時期は、縄文時代全体を通じて5つの時期に区分される。具体的には、早期・早々期（約12,000年前から約7,000年前）、前期（約7,000年前から約5,500年前）、中期（約5,500年前から約4,500年前）、後期（約4,500年前から約3,500年前）、晩期（約3,500年前から約2,800年前）である。黒曜石の産出地については、神津島、信州（和田峠、男女倉、諏訪、蓼科を含む）、箱根（天城を含む）、高原山の4つの主要な産地に分類される。
+
+また、本研究では黒曜石の出土パターンを解析するために、以下の地理データを使用する。第一に、標高データとして国土地理院による5次メッシュ（250mメッシュ）の数値標高モデル（Digital Elevation Model; DEM）を使用する。これには、平均標高に加えて、最大・最小標高、傾斜角度などの地形特性が含まれる。第二に、国土地理院の基盤地図情報から得られる河川データと湖沼データを使用する。これらの地理データは、後の解析で黒曜石の流通経路や遺跡の立地条件を考慮するために用いる。
+
+データの特徴として、時期や産地による出土数の偏りが見られる。また、発掘調査の有無による観測バイアスを考慮する必要がある。すなわち、遺跡が存在していたとしても、発掘調査が行われていない地点では黒曜石の出土が観測されない。このような調査バイアスの影響を適切に補正することが、本研究における重要な課題の一つとなる。
+
+\subsection{ノンパラメトリック法による予備分析}
+
+本節では、黒曜石の産地構成比の空間分布を、Radial Basis Function Interpolation\cite{hardy1971}を元にした以下のノンパラメトリックモデルによって推定した結果を示す。まず、観測データを以下のように表す：
+\begin{itemize}
+    \item $X = \{s_1, \ldots, s_{n_X}\}$: 遺跡の位置の集合
+    \item $y_{ik}$: 遺跡$i$における産地$k$の黒曜石の出土個数
+    \item $\mathcal{D} \subset \mathbb{R}^2$: 解析対象領域（関東地方の陸地）
+\end{itemize}
+
+任意の地点$s \in \mathcal{D}$における産地$k$の構成比$q_k(s)$に対して、以下のカーネル推定量を構築する：
+$$
+\hat{q}_k(s) = \frac{\sum_{i=1}^{n_X} K_h(s - s_i) \cdot y_{ik}}{\sum_{i=1}^{n_X} K_h(s - s_i) \cdot \sum_{k'} y_{ik'}}
+$$
+ただし、$K_h$は以下のように定義されるカーネル関数である：
+$$
+K_h(s - s_i) = \frac{1}{h^2}\exp\left(-\frac{d(s - s_i)^2}{2h^2}\right) \\
+$$
+ここで、$h > 0$はバンド幅パラメータであり、$d(\cdot, \cdot)$は平面直角座標系におけるユークリッド距離（km）を表す。この推定量は、任意の $s \in \mathcal{D}$ について $\sum_k \hat{q}_k(s) = 1$ が成り立ち、構成比としての性質を満たしている。
+
+バンド幅パラメータを$h = 14$として推定を行った結果について、早々期・早期の神津島産の黒曜石を例にして図\ref{fig:kernel-kouzu}に示す。神津島産の黒曜石は海岸部で高い構成比を示す傾向がある。
+
+\begin{figure}[htbp]  % 位置指定子を追加
+    \centering
+    \includegraphics[width=1.2\linewidth]{fig/obsedian_ratio_0_kouzu.png}  % widthを\linewidthに変更
+    \caption{早々期・早期における神津島産黒曜石の構成比とノンパラメトリック法による推定結果。}
+    \label{fig:kernel-kouzu}
+\end{figure}
+
+この空間補間によって調査領域上の産地構成比の大域的な空間分布を把握することが可能となった。しかしながら、本手法には統計モデルとしての課題が存在する。第一に、遺跡の位置$X$に関する蓋然性を考慮せず、遺跡の立地に関する地理的要因を考慮していない。第二に、発掘調査の有無や規模に起因する観測バイアスを適切にモデル化していない。これらの課題に対処するために、次章以降では点過程に基づくより精緻なモデルの構築を試みる。
+
+\section{presence-onlyデータと点過程}
+
+前章では黒曜石の出土データの概要と、空間分布を把握するための予備的な分析を行ったが、より精緻なモデルを構築するために、まず点過程による統計モデリングの一般論について整理する。これは次章で提案する具体的なモデルの基礎となるものである。本章ではpresence-onlyデータの特徴と、その解析手法としての点過程について説明する。
+
+
+\subsection{presence-onlyデータ}
+
+Presence-onlyデータとは、対象となる種や現象が観測された地点の情報のみを含むデータであり、不在データを含まないもののことをいう。生態学や環境科学の分野では、種の分布を推定する際の重要な情報源として広く用いられている。
+
+不在データが含まれない特性により、種が観測されなかった地点で本当に種が存在しないのか、それとも観測されていないだけなのかを区別することができない。このような特性は、データ解析において大きな課題となる。従来の解析手法である最大エントロピー法（MaxEnt法）\cite{Phillips2006}や最大尤度法（MaxLike法）\cite{Royle2012}は、この課題に対処するため、環境要因に基づいて種の存在確率を推定する。
+
+しかし、Gelfand and Shirota\cite{Gelfand2019}は、これらの手法における問題点として、偽不在データの使用や空間的依存性の無視、サンプリングバイアスの影響などを指摘している。そして、これらの問題に対処するためには、点過程によるアプローチの有効性を主張している。点過程モデルでは、種の分布を空間上の確率過程として捉えることで、より自然な形でデータ生成プロセスをモデル化することが可能となる。
+
+\subsection{点過程の定義}
+
+点過程は、連続的な時間や空間上に発生する離散的なイベントの発生位置、発生時刻を記述する確率過程である。歴史的には地震のモデル、株の板情報のモデル、感染症のモデル、脳のニューロンのモデルなどに使われてきた。
+
+本研究では特に、空間上の事象の発生を記述する空間点過程に着目する。その中でも、点の発生がポアソン分布に従い、かつ独立に生起するポアソン過程は、数学的な扱いやすさと実用性の両面から重要である。
+
+\begin{dfn}[ポアソン過程]
+$X$を$\mathcal{D}$上の計数過程とし、$\lambda(s)$を$\mathcal{D}$上の連続な非負実数値可測関数とする。任意の(可測)集合$D \subset \mathcal{D}$に対して、
+$$
+\Lambda(D) := \int_D \lambda(s) ds
+$$
+とする。ここで、
+$$
+X(D) \sim \text{Poisson}(\Lambda(D))
+$$
+であり、かつ、任意の$k\in \mathbb{N}$に対して、互いに素な集合$D_1, D_2, \ldots , D_k$に対して、$X(D_1), X(D_2), \ldots , X(D_k)$が互いに独立であるとき、$X$を\textbf{強度$\lambda(s)$を持つ非斉次ポアソン過程 (Non-Homogeneous Poisson Process)}とよび、
+$$
+X \sim \text{IPP}(\lambda)
+$$
+とかく。
+\end{dfn}
+
+非斉次ポアソン過程$X$の尤度関数は、データ生成過程から以下のように導出される：
+\begin{align*}
+P(X \mid \lambda)
+&= \frac{\left[\Lambda(\mathcal{D})\right]^{n_X} e^{-\Lambda(\mathcal{D})}}{n_X!} \cdot \prod_{i=1}^{n_X} \frac{\lambda(s_i)}{\Lambda(\mathcal{D})}\\
+&= \frac{e^{-\Lambda(\mathcal{D})}}{n_X!} \cdot \prod_{i=1}^{n_X} \lambda(s_i)\\
+&=  \exp\left( -\int_{\mathcal{D}} \lambda(s) \, ds \right) \cdot \frac{1}{n_X!}\cdot \prod_{i=1}^{n_X} \lambda(s_i)
+\end{align*}
+
+\subsection{ベイズ推論における課題}
+
+非斉次ポアソン過程に対するベイズ推論を行う際の主な技術的課題は、尤度関数に含まれる積分項$\int_{\mathcal{D}} \lambda(s) \, ds$の計算である。この積分は、強度関数$\lambda(s)$の形状によっては解析的に計算することができない。
+
+従来のアプローチでは、この問題に対処するため、領域$\mathcal{D}$を離散的なグリッドに分割し、積分を数値的に近似する方法が用いられてきた\cite{Fithian2013}。しかし、この離散近似では、MCMCによるパラメータ推定の際に深刻な問題が生じる可能性がある。特に、在データと偽不在データの比率が極端に不均衡となる場合、サンプリング効率が著しく低下し、事後分布からの効率的なサンプリングが困難となることが知られている\cite{Zens2023-nr}。
+
+この問題を解決するために、Moreira and Gamerman\cite{Moreira2022}は、潜在変数を導入することで積分項を消去し、厳密なベイズ推論を可能にする手法を提案している。この手法では、離散近似を用いることなく効率的な推定が可能となる。次章では、この潜在変数アプローチに基づく推定手法について詳しく述べる。
+
+\section{先行研究と提案手法}
+
+\subsection{先行研究の概要}
+
+Presence-onlyデータの解析手法は、生態学分野への応用を念頭に急速な発展を遂げてきた。初期の代表的な手法である最大エントロピー法（MaxEnt法）\cite{Phillips2006}は、種の生息に影響を与える環境要因と観測された出現地点の関係から、種の分布を推定する。MaxEnt法は、presence-onlyデータに対して強力な推定手法として広く用いられてきたが、偽不在データを必要とする点や、観測バイアスを適切に扱えない点などの理論的な課題が存在する。
+
+これらの課題に対し、Fithian and Hastie\cite{Fithian2013}は、点過程モデルによる定式化を提案した。彼らは、非斉次ポアソン過程の尤度関数とMaxEnt法の等価性を示すとともに、点過程モデルの理論的枠組みにより、偽不在データの選択がモデルの推定に与える影響をより明確に理解できることを指摘した。
+
+点過程モデルに対するベイズ推論の方法論も、近年急速な発展を遂げている。前章で述べた離散近似による方法の問題点を克服するため、Gonçalves and Gamerman\cite{Goncalves2018}は潜在変数を導入することで、積分項を解析的に消去する手法を提案した。さらにMoreira and Gamerman\cite{Moreira2022}は、この方法を発展させ、観測バイアスを考慮したより一般的なフレームワークを確立した。これらの研究により、数値近似に頼ることなく効率的なMCMCアルゴリズムによる推定が可能となった。
+
+\subsection{既存手法: 潜在変数アプローチによるモデル}
+
+本研究の提案手法は、Moreira and Gamerman\cite{Moreira2022}のモデルにマーク付き点過程の枠組みと観測バイアスの補正を組み込んだものである。そのため、まず彼らのモデルと推定アルゴリズムについて詳しく説明し、人工データによる検証結果を示す。これは、次節で提案するモデルの数理的基礎となる部分である。
+
+Moreira and Gamerman\cite{Moreira2022}の手法の特徴は、強度関数を以下のように分解することにある：
+$$
+\lambda(s) = \lambda^* \cdot q(s), \quad s \in \mathcal{D}
+$$
+ここで、$\lambda^* > 0$は強度関数の上限を表すパラメータであり、$q: \mathcal{D} \longrightarrow [0, 1]$は位置$s$における相対的な強度を表す関数である。$q(s)$は説明変数$\boldsymbol{W}(s) \in \mathbb{R}^p$と回帰係数$\boldsymbol{\beta} \in \mathbb{R}^p$を用いて以下のように定義される：
+$$
+q(s) = \frac{\exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}{1 + \exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}
+$$
+
+この表現のもとで、非斉次ポアソン過程の尤度関数は以下のように書ける：
+\begin{align*}
+P&(X \mid \boldsymbol{\beta}, \lambda^*) \\
+&= \exp\left( -\lambda^* \int_{\mathcal{D}} q(s) \, ds \right) \cdot 
+\frac{(\lambda^*)^{n_X}}{n_X!} \\
+&\quad \cdot \prod_{i=1}^{n_X} \frac{\exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right)}
+{1 + \exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right)}
+\end{align*}
+
+前節で述べたように、この尤度関数に含まれる積分項の計算が技術的な課題となる。この問題に対し、Moreira and Gamermanは新たな点過程$U$を潜在変数として導入する：
+$$
+U \sim \text{IPP}(\lambda^*(1-q))
+$$
+これは、強度関数$\lambda^*(1-q)$を持つ非斉次ポアソン過程である。この過程は、イベントが発生していない地点での潜在的な点の分布を表現する。$U$からのサンプルの総数を$n_U$とし、サンプルの位置をそれぞれ$s_{n_X+1}, \ldots, s_{n_X+n_U}$とする。
+
+このとき、$X$と$U$の結合尤度は以下のように表される：
+\begin{align*}
+P&(X, U \mid \boldsymbol{\beta}, \lambda^*) \\
+&= \exp \left( - \lambda^* |\mathcal{D}| \right) \cdot 
+\frac{(\lambda^*)^{n}}{n_X!n_U!} \\
+&\quad \cdot \prod_{i=1}^{n}  \frac{\left\{ \exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right) \right\} ^{y_i}}
+{1 + \exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right)}
+\end{align*}
+ここで、$n = n_X + n_U$であり、$y_i$は在/不在を表す二値変数である：
+$$
+y_i = \begin{cases}
+1, & \text{if } i = 1, 2, \dots, n_X  \\
+0, & \text{if } i = n_X + 1, \dots, n 
+\end{cases}
+$$
+さらに、Polya-Gamma分布に従う潜在変数$\boldsymbol{\omega} = (\omega_1, \ldots, \omega_n)^\top$を導入することで、効率的なギブスサンプリングが可能となる。パラメータの事後分布からのサンプリングは以下のように行われる：
+\begin{align*}
+\boldsymbol{\beta} \mid \boldsymbol{\omega}, X, U, \lambda^* 
+&\sim \mathcal{N}(\boldsymbol{m}, V) \\
+\lambda^* \mid \boldsymbol{\beta}, \boldsymbol{\omega}, X, U 
+&\sim \text{Ga}(m_0 + n, r_0 + |\mathcal{D}|) \\
+\omega_i \mid \boldsymbol{\beta}, X, U 
+&\sim \text{PG}(1, \boldsymbol{W}(s_i)^\top \boldsymbol{\beta})
+\end{align*}
+ここで、$\text{PG}(b,c)$はパラメータ$b,c$のPolya-Gamma分布\cite{Polson2013}を表し、$m_0,r_0$は$\lambda^*$の事前分布$\text{Ga}(m_0,r_0)$のパラメータである。また、$\boldsymbol{m}$と$V$は以下のように定義される：
+\begin{align*}
+V^{-1} &= B_0^{-1} + \boldsymbol{W}^\top \Omega \boldsymbol{W} \\
+\boldsymbol{m} &= V(B_0^{-1}\boldsymbol{b}_0 + \boldsymbol{W}^\top \Omega \boldsymbol{z})
+\end{align*}
+ただし、$B_0$と$\boldsymbol{b}_0$は$\boldsymbol{\beta}$の事前分布$\mathcal{N}(\boldsymbol{b}_0, B_0)$のパラメータ、$\Omega = \text{diag}(\omega_1, \ldots, \omega_n)$、$\boldsymbol{z} = ((y_1 - 1/2)/\omega_1, \ldots, (y_n - 1/2)/\omega_n)^\top$である。
+
+\subsection{既存手法の検証}
+
+このモデルの有効性を確認するため、2次元の人工データを用いた実験を行った。領域$\mathcal{D} = [0, 20] \times [0, 20]$上で、以下のような12個の基底関数を用いて強度関数を設定した：
+$$
+\boldsymbol{W}(x, y) = \begin{bmatrix}
+1 \\
+x \\
+y \\
+x^2 \\
+y^2 \\
+xy \\
+\sin(\omega_x x) \\
+\cos(\omega_x x) \\
+\sin(\omega_y y) \\
+\cos(\omega_y y) \\
+\sin(\omega_{xy} (x + y)) \\
+\cos(\omega_{xy} (x - y))
+\end{bmatrix}, \quad \omega_x = \omega_y = \omega_{xy} = 0.5
+$$
+
+真の回帰係数を
+$$
+\boldsymbol{\beta} = \begin{bmatrix}
+-1 \\ -0.1 \\ -0.5 \\ -0.05 \\ -0.1 \\ 0.2 \\ 
+4 \\ -4 \\ 4 \\ -4 \\ -9 \\ -7
+\end{bmatrix}
+$$
+強度の上限を$\lambda^* = 50$として設定し、非斉次ポアソン過程からデータを生成した。MCMCの反復回数を10,000回として推定を行った結果を図\ref{fig:2d-trace-1}と\ref{fig:model2-2d}に示す。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\linewidth]{fig/2d_trace_1.png}
+    \caption{MCMCのトレースプロット。$\beta_1$から$\beta_4$までを表示。}
+    \label{fig:2d-trace-1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1\linewidth]{fig/2d_predictive_mean_intensity.png}
+\caption{2次元データでの推定結果。赤点が観測されたデータの発生位置、等高線が推定された強度関数の事後平均を示す。}
+\label{fig:model2-2d}
+\end{figure}
+
+図\ref{fig:2d-trace-1}から、パラメータの推定は非常に効率的に行われていることがわかる。また、
+図\ref{fig:model2-2d}に示すように、推定された強度関数は真の強度関数のパターンをよく再現しており、Moreira and Gamerman\cite{Moreira2022}の手法が、離散近似を用いることなく効率的なベイズ推論を実現できることが確認された。
+
+\subsection{提案手法：観測バイアスを考慮したマーク付き点過程モデル}
+
+本研究で提案するモデルは、Moreira et al. (2024)\cite{Moreira2024}を参考に、黒曜石のデータをマーク付き点過程としてモデル化するものである。遺跡の位置を点過程として捉え、各遺跡での産地ごとの黒曜石の出土数をマークとして扱う。さらに、発掘調査の有無による観測バイアスを明示的にモデル化することで、より現実的な推定を目指す。
+
+黒曜石データ特有の課題として、以下の3点が挙げられる。第一に、データ数が限られており（224遺跡、31,244点）、高次元のパラメータを安定して推定することが難しい。第二に、時期や産地による出土数の偏りが大きく、単純な補間では信頼性の高い推定が困難である。第三に、発掘調査の空間的な偏りが存在し、観測バイアスを適切に補正する必要がある。
+
+既存手法では、これらの課題に十分に対処することができない。Moreira and Gamerman (2022)\cite{Moreira2022}のモデルは効率的なベイズ推論を可能にしたが、マーク情報（産地情報）を扱うことができず、また観測バイアスの補正も不十分である。さらに、データ数が限られている場合のパラメータ推定の安定性にも課題が残る。
+
+これらの課題に対処するために、以下のような3段階のモデルを提案する。なお、ここでは時期に関しては独立に扱い、各時期についてそれぞれ別個にモデルを構築する。
+
+まず、観測された遺跡の位置を$X = \{s_1, \ldots, s_{n_X}\}$とし、未観測の遺跡の位置を表す潜在変数を$X' = \{s_{n_X+1}, \ldots, s_{n_X+n_{X'}}\}$とする。また、遺跡が存在しない地点を表す潜在変数を$U = \{s_{n_X+n_{X'}+1}, \ldots, s_n\}$とする。これらの点過程は、それぞれ以下の強度関数を持つ非斉次ポアソン過程に従うとする：
+\begin{align*}
+X &\sim \text{IPP}(q(s)p(s)\lambda^*) \\
+X' &\sim \text{IPP}(q(s)(1-p(s))\lambda^*) \\
+U &\sim \text{IPP}((1-q(s))\lambda^*)
+\end{align*}
+ここで、$\lambda^*$は強度関数の上限を表すパラメータである。
+
+遺跡の存在確率$q(s)$を以下のようにモデル化する：
+$$
+\operatorname{logit} q(s) = \boldsymbol{W}_{\text{int}}(s)^\top \boldsymbol{\beta}_{\text{int}}, \quad s \in \mathcal{D}
+$$
+ここで、$\boldsymbol{W}_{\text{int}}(s)$は地形的特徴などの説明変数であり、$\boldsymbol{\beta}_{\text{int}}$は対応する回帰係数である。
+
+次に、遺跡が観測（発掘調査）される確率$p(s)$を以下のようにモデル化する：
+$$
+\operatorname{logit} p(s) = \boldsymbol{W}_{\text{obs}}(s)^\top \boldsymbol{\beta}_{\text{obs}} + \gamma S(s), \quad s \in \mathcal{D}
+$$
+各遺跡$s \in X \cup X'$における産地$k$の黒曜石の出土数$Z_k(s)$を以下のようにモデル化する：
+$$
+Z_k(s) \mid s \in X \cup X' \sim \text{Poisson}\left(\exp\left(\boldsymbol{W}_z(s)^\top \boldsymbol{\beta}_{z,k} + S_k(s)\right)\right)
+$$
+ここで、$\boldsymbol{\beta}_{z,k}$は産地$k$に対応する回帰係数であり、$S_k(s)$は産地$k$に対応する空間的相関を表す。
+
+この定式化により、任意の地点$s \in \mathcal{D}$における産地$k$の構成比$\pi_k(s)$は以下のように推定される：
+$$
+\pi_k(s) = \frac{\exp\left(\boldsymbol{W}_z(s)^\top \boldsymbol{\beta}_{z,k} + S_k(s)\right)}{\sum_{k'} \exp\left(\boldsymbol{W}_z(s)^\top \boldsymbol{\beta}_{z,k'} + S_{k'}(s)\right)}
+$$
+
+パラメータの推定には、以下の拡張を導入する。第一に、データ数が限られていることを考慮し、Bayesian Lassoによる正則化を導入する。具体的には、回帰係数$\boldsymbol{\beta}_{\text{int}}, \boldsymbol{\beta}_{\text{obs}}, \boldsymbol{\beta}_z$に対して、以下のような事前分布を設定する：
+$$
+\beta_j \mid \tau_j^2 \sim \mathcal{N}(0, \tau_j^2), \quad 
+\tau_j^2 \mid \lambda \sim \text{Exp}(\lambda^2/2)
+$$
+
+第二に、空間的相関$S(s)$に対して、以下のようなガウス過程を事前分布として設定する：
+$$
+S(\cdot) \sim \text{GP}(0, \sigma^2\rho(\cdot))
+$$
+ここで、$\rho(\cdot)$は相関関数であり、$\sigma^2$は分散パラメータである。
+
+パラメータの推定には、Polson et al. (2013)\cite{Polson2013}によるPolya-Gamma変数による拡張と、Lewis and Shelder (1979)\cite{Lewis1979}によるPoisson thinningを組み合わせたMCMCアルゴリズムを構築する必要がある。その基本的な枠組みは、Moreira and Gamerman (2022)\cite{Moreira2022}のアルゴリズムに基づく予定であるが、マーク付き点過程への拡張と観測バイアスの補正を組み込んだサンプリングアルゴリズムの具体的な構築は、今後の課題である。
+
+\section{まとめと今後の方向性}
+
+本論文では、黒曜石の出土データを非斉次ポアソン過程の枠組みでモデル化し、その産地構成比の時空間分布を推定する方法を提案した。前処理として実施したノンパラメトリック法による予備分析から、産地構成比の大域的な空間分布を把握することができた。その上で、より精緻な統計モデルとして、観測バイアスを考慮したマーク付き点過程モデルを提案した。
+
+本研究の主な貢献は以下の2点である。第一に、黒曜石の産地構成比の推定に対して、初めて点過程モデルを導入したことである。第二に、Moreira and Gamerman (2022)\cite{Moreira2022}のモデルを基礎とし、Moreira et al. (2024)\cite{Moreira2024}によるマーク付き点過程の枠組みを、カウントデータに対応するように拡張した点である。具体的には、マークの確率分布としてポアソン回帰モデルを採用し、産地構成比の推定を可能にした点である。
+
+今後の課題として、以下の点が挙げられる。最も重要な課題は、提案したモデルに対するMCMCアルゴリズムの構築である。これは次のステップとして直ちに取り組むべき課題であり、モデルの実用化のために不可欠である。
+
+第二に、提案手法の黒曜石データへの適用である。本論文で提案したモデルを実データに適用し、その有効性を検証する必要がある。特に、産地構成比の推定結果が考古学的な知見と整合的であるかを慎重に検討しなければならない。
+
+第三に、モデルの予測性能の評価である。Gelfand and Shirota\cite{Gelfand2019}が指摘するように、presence-onlyデータに対する予測とモデルの評価は、通常のモデルよりも本質的に困難である。そのため、予測性能のみにこだわることなくモデルの信頼性を適切に評価し、その妥当性を議論することが求められる。
+
+第四に、時期間の相関構造のモデル化である。現在のモデルでは各時期を独立に扱っているが、時期間の連続性を考慮することで、より現実的かつ効率的な推定が可能になると考えられる。
+
+第五に、考古学的な知見の活用である。具体的には、遺跡の立地条件や黒曜石の流通経路に関する専門知識を、新たな説明変数として取り入れること、また、それらの知見を事前分布の設定に反映させることを検討している。
+
+モデルの有効性を示すためには、実データによる検証が不可欠である。提案手法によって、黒曜石の産地構成比の時空間分布に関する新たな知見が得られることが期待される。
+
+\bibliographystyle{unsrt} %参考文献出力スタイル
+\bibliography{reference}
+
+\end{document}
+
+\newpage
+
+\section*{A 付録}
+\subsection*{A.1 付録の書き方}
+必要に応じて、謝辞の後に付録を記述することができる。付録の見出しは本文の
+章節と同様の形式とするが、見出しは「A 付録」とする。
+
+\end{document}

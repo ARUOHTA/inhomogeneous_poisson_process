@@ -1,0 +1,442 @@
+%
+%このファイルは日本バーチャルリアリティ学会複合現実感研究会原稿用スタイルファイル
+%sigmr2e.sty(ver.1.0) を利用したサンプルファイルです。
+%
+\documentclass[a4paper,twoside,dvipdfmx]{jsarticle}  % dvipdfmxオプションを追加
+\usepackage[ipaex]{pxchfon}
+\usepackage{sigmr2e}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{dfn}{定義}[section]
+
+\usepackage[dvipdfmx]{graphicx}
+
+%和文タイトル　論文のヘッダ部分にも出力されます。　 
+\jtitle{
+    黒曜石産地構成比の空間統計モデル
+}
+
+%著者日本名   
+\jauthor{
+    太田 阿留\thanks{京都大学情報学研究科}
+}
+
+%英文タイトル
+\etitle{
+    Spatial Statistical Models for Obsidian Source Composition
+}
+
+%著者英文名
+\eauthor{
+    Aru Ohta\thanks{Graduate School of Informatics, Kyoto University}
+}
+
+%西暦(4桁まで)
+\YEAR{2024}
+\MONTH{12}
+
+
+%論文のヘッダにつける著者名
+\AUTHOR{太田 阿留}
+
+\def\MARU#1{{\rm\ooalign{\hfil\lower.168ex\hbox{#1}\hfil \crcr\mathhexbox20D}}}
+
+\begin{document}
+
+%maketitle は abstract と keyword の後に入れてください。
+
+\begin{abstract}
+黒曜石の流通パターンの解明は、縄文時代における人々の移動や交流の実態を把握する上で重要な手がかりとなる。本研究では、関東地方の224箇所の遺跡から出土した総計31,244点の黒曜石を対象とし、その産地構成比の時空間分布を統計的に推定する手法を開発した。
+
+本研究では4つの異なるアプローチを実装した。まず、非斉次ポアソン過程により遺跡の存在確率をモデル化し、発掘調査バイアスを統計的に補正した。次に、Tobler's Hiking Functionに基づく地形考慮距離を用いたNadaraya-Watson推定量による空間補間を行った。さらに、Kernel Stick-Breaking Processを多項分布データに拡張し、ベイズノンパラメトリック推定を実施した。最後に、空間変化係数を持つ多項ロジスティック回帰モデルにNearest-Neighbor Gaussian Process近似を適用し、局所的な産地構成比の空間パターンを捉えることができた。
+
+実データへの適用により、神津島産黒曜石が海岸部で高い構成比を示すことや、信州産が内陸部で優位であることなど、従来の考古学的知見と整合的な結果が得られた。本研究は、考古学データに対する空間統計手法の適用可能性を示し、今後のモデル拡張の基礎となる枠組みを提供した。
+\end{abstract}
+
+\begin{keyword}	
+Presence-onlyデータ、Species Distribution Modeling、点過程、時空間統計、ベイズ統計
+\end{keyword}
+
+\maketitle	
+
+\section{はじめに}
+
+\subsection{黒曜石の流通と交易システム}
+
+現生人類は約38,000年前から日本列島に移動し居住をしてきたが、中国からの漢字の伝播による文字の使用はおよそ2,000年前からのことである。そのため、この長期にわたる文字資料のない時代の人々の移動や生活を、実証的な方法で復元する方法論は限られており、遺跡から発掘される遺構や遺物が、ほぼ唯一の分析視点となる。
+
+黒曜石は、旧石器時代から縄文時代にかけて、石器を作るための優れた材料として使用されてきた。黒曜石の産出地は地理的に限定されているため、空間的な出土パターンを分析することで、その流通経路を追跡し、当時の人々の移動や交流の実態を推測することが可能である。
+
+縄文時代になると、黒曜石は広域的な流通システムの中で取引されるようになった。黒曜石は原産地の集落だけではなく、異なる集団間で広く流通するようになっていた。例えば、茅野市駒形遺跡では縄文時代前期の遺跡から55,325点もの黒曜石が出土し、そのうち分析された8,175点の約75％が諏訪系であることが判明しており、この遺跡が原産地から消費地への黒曜石の搬出入を担う拠点的な役割を果たしていたことを示している\cite{tsutsumi2018}。
+
+このような黒曜石の流通パターンと時空間的分布を定量的に解明することは、当時の居住システムと集団間の関係とその変化の過程を解明する重要な手がかりとなる。
+
+\subsection{研究の目的と方針}
+
+本研究は、黒曜石の産地構成比の時空間分布を、統計的アプローチによって定量的に推定することを目的とする。具体的には、観測地点以外の任意の地点における産地構成比の推定を可能とする統計モデルの構築を目指す。さらに、発掘調査に伴うサンプリングバイアスを補正するため、考古学的専門知識を統計モデルに組み込むための包括的なフレームワークを提案する。
+
+このような目的を達成するため、本研究では主に生態学分野への応用を目的として発展してきた統計的手法を利用する。特に、Species Distribution Modeling (SDM)という枠組みの中で広く利用されている点過程(Point Process)モデル\cite{Renner2015}を採用する。点過程モデルの枠組みにおいて、黒曜石のデータは在のみデータ(Presence-only data)\cite{Pearce2006,Phillips2006}として扱われる。このように、統計モデルに基づく黒曜石の時空間分布の解析は先行研究には存在しない。
+
+本論文の構成は以下の通りである。まず2章において黒曜石データの特徴と本研究で使用する地理情報について説明する。次に3章において本研究で開発した4つの統計的手法について詳述する。最後に4章において、これら4つの手法についての考察および今後の研究展望について論じる。
+
+\section{黒曜石データ}
+
+\subsection{データの概要}
+
+本研究では、関東地方（北緯34-37度、東経138-141度）における224箇所の遺跡から出土した黒曜石のデータを分析対象とする。各遺跡について、遺跡名、位置情報（緯度・経度）、および出土した黒曜石の情報（時期、産地、点数）が記録されており、総出土数は31,244点である。
+
+出土時期は、縄文時代全体を通じて5つの時期に区分される。具体的には、早期・早々期（約12,000年前から約7,000年前）、前期（約7,000年前から約5,500年前）、中期（約5,500年前から約4,500年前）、後期（約4,500年前から約3,500年前）、晩期（約3,500年前から約2,800年前）である。黒曜石の産出地については、神津島、信州（和田峠、男女倉、諏訪、蓼科を含む）、箱根（天城を含む）、高原山の4つの主要な産地に分類される。
+
+また、本研究では黒曜石の出土パターンを解析するために、以下の地理データを使用する。第一に、標高データとして国土地理院による5次メッシュ（250mメッシュ）の数値標高モデル（Digital Elevation Model; DEM）を使用する。これには、平均標高に加えて、最大・最小標高、傾斜角度などの地形特性が含まれる。第二に、国土地理院の基盤地図情報から得られる河川データと湖沼データを使用する。これらの地理データは、後の解析で黒曜石の流通経路や遺跡の立地条件を考慮するために用いる。
+
+データの特徴として、時期や産地による出土数の偏りが見られる。また、発掘調査の有無による観測バイアスを考慮する必要がある。すなわち、遺跡が存在していたとしても、発掘調査が行われていない地点では黒曜石の出土が観測されない。このような調査バイアスの影響を適切に補正することが、本研究における重要な課題の一つとなる。
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.8\linewidth]{fig/obsidian_map.png}
+    \caption{遺跡と産地の位置}
+    \label{fig:placeholder}
+\end{figure}
+
+
+\section{提案手法}
+本章では、黒曜石産地構成比の空間分布を推定するために開発した4つの手法について説明する。これらの手法は、遺跡の存在確率を推定するモデル1つと、黒曜石の産地構成比を推定するモデルの3つに大別される。これらの手法は、第一に、非斉次ポアソン過程（IPP）による遺跡の存在確率の推定、第二に、Nadaraya-Watson推定量、第三に、Kernel Stick-Breaking Process（KSBP）によるノンパラメトリックベイズ手法、第四に、Nearest-Neighbor Gaussian Process（NNGP）を用いた空間変化係数多項ロジスティック回帰である。
+\subsection{非斉次ポアソン過程（IPP）モデル：遺跡の存在確率}
+
+遺跡の空間分布をモデル化するために、非斉次ポアソン過程を用いた統計モデルを構築した。点過程は、連続的な時間や空間上に発生する離散的なイベントの発生位置を記述する確率過程であり、地震学、感染症学、生態学\cite{Gelfand2018}など幅広い分野で応用されている。本研究では、遺跡の位置を確率過程として捉えることで、地形的要因や産地からの距離など、遺跡立地に影響を与える要因を定量的に評価する。
+
+\subsubsection{非斉次ポアソン過程の理論的基盤}
+
+観測領域$\mathcal{D}$上での計数過程$X$が強度$\lambda(s)$を持つ非斉次ポアソン過程に従うとき、任意の可測集合$D \subset \mathcal{D}$に対して
+$$X(D) \sim \text{Poisson}\left(\int_D \lambda(s) ds\right)$$
+が成り立つ。尤度関数は以下のように表現される：
+$$
+P(X \mid \lambda) = \exp\left( -\int_{\mathcal{D}} \lambda(s) \, ds \right) \cdot \frac{1}{n_X!}\cdot \prod_{i=1}^{n_X} \lambda(s_i)
+$$
+
+しかし、この定式化にはベイズ推論において重大な計算上の課題が存在する。積分項$\int_{\mathcal{D}} \lambda(s) \, ds$の計算が解析的に困難であり、従来の離散近似では計算効率が著しく低下する。
+
+\subsubsection{潜在変数アプローチによる解決策}
+
+この課題を解決するため、Moreira and Gamerman (2022)\cite{Moreira2022}の潜在変数アプローチを採用した。強度関数を以下のように分解する：
+$$
+\lambda(s) = \lambda^* \cdot q(s)
+$$
+ここで、$\lambda^* > 0$は強度の上限値、$q(s)$は位置$s$での相対的存在確率であり、
+$$
+q(s) = \frac{\exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}{1 + \exp(\boldsymbol{W}(s)^\top \boldsymbol{\beta})}
+$$
+として定義される。$\boldsymbol{W}(s)$は位置$s$での説明変数ベクトル（標高、傾斜、産地からの距離、河川からの距離など）である。
+
+偽不在を表す潜在点過程$U$を導入する：
+$$U \sim \text{IPP}(\lambda^*(1-q))$$
+
+この拡張により、同時尤度は以下のように表現される：
+$$\begin{aligned}
+    &P(X, U \mid \boldsymbol{\beta}, \lambda^*) \\&= \exp \left( - \lambda^* |\mathcal{D}| \right) \cdot \frac{(\lambda^*)^{n}}{n_X!n_U!} \prod_{i=1}^{n} \frac{\left\{\exp\left( \boldsymbol{W}(s_i)^\top \boldsymbol{\beta} \right)\right\}^{y_i}}{1 + \exp\left(\boldsymbol{W}(s_i)^\top \boldsymbol{\beta}\right)}
+\end{aligned}$$
+ここで$n = n_X + n_U$、$y_i$は観測点$(y_i=1)$と潜在点$(y_i=0)$を区別する二値変数である。
+
+\subsubsection{MCMCアルゴリズムの実装}
+
+Pólya-Gamma data augmentation\cite{Polson2013}を用いることで、ロジスティック回帰の尤度を正規分布に変換し、効率的なギブスサンプリングを行う。各パラメータの完全条件付き分布は以下のように導出される：
+
+$$\boldsymbol{\beta} \mid \boldsymbol{\omega}, X, U, \lambda^* \sim \mathcal{N} \left( \boldsymbol{m}, V \right)$$
+$$\lambda^* \mid \boldsymbol{\beta}, \boldsymbol{\omega}, X, U \sim \text{Ga}\left( m_0 + n, \quad r_0 + |\mathcal{D}| \right)$$
+
+ここで、$V=\left( B_0^{-1} + W^\top \Omega W \right)^{-1}$、$\boldsymbol{m} = V \left( B_0^{-1} \boldsymbol{b}_0 + W^\top \Omega \boldsymbol{z} \right)$、$\Omega = \text{diag}(\omega_1, \ldots, \omega_n)$である。
+
+潜在点過程$U$のサンプリングはPoisson thinning法\cite{Lewis1979}により実行される：(1) $N \sim \text{Poisson}(\lambda^* |\mathcal{D}|)$個の点を一様生成、(2) 各点$s_j$について確率$1-q(s_j)$で受理、(3) 受理された点の集合が新たな$U$となる。
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{fig/site_probability.png}
+    \caption{IPPモデルの推定結果}
+    \label{fig:ipp}
+\end{figure}
+
+このモデルの推定結果を図2に示す。のアプローチにより、従来解析困難であった積分項を回避し、高次元パラメータ空間での効率的な推定が可能となった。実データでの推定結果では、標高、傾斜、産地からの距離、河川からの距離が遺跡立地に有意な影響を与えることが確認されている。
+
+\subsection{Nadaraya-Watson推定量}
+
+遺跡における産地構成比の推定を行うため、ノンパラメトリック回帰手法であるNadaraya-Watson推定量を適用した。このアプローチは、パラメトリックモデルの関数形を仮定せず、データ駆動的に空間パターンを推定する頻度主義的手法である。
+
+\subsubsection{理論的基盤と定式化}
+
+遺跡$i$における産地$k$の構成比$\pi_k(s_i) = y_{ik}/\sum_{k'}y_{ik'}$を観測値として、任意の位置$s$における産地$k$の構成比を以下のように推定する：
+$$
+\hat{\pi}_k(s) = \frac{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot y_{ik}}{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot \sum_{k'} y_{ik'}}
+$$
+
+この推定量の重要な性質は、任意の位置$s$について$\sum_k \hat{\pi}_k(s) = 1$が自動的に成り立つことであり、構成比としての制約を自然に満たす。カーネル関数として以下のガウスカーネルを採用する：
+$$
+K_h(d) = \frac{1}{h^2} \exp \left(-\frac{d^2}{2h^2}\right)
+$$
+
+ここで$h > 0$はバンド幅パラメータであり、推定の局所性を制御する重要なハイパーパラメータである。
+
+\subsubsection{Tobler's Hiking Functionによる地形を考慮した距離}
+
+従来のユークリッド距離では地形の複雑さを適切に反映できないため、Tobler's Hiking Function\cite{Tobler1999-gx}に基づく移動コスト距離を導入した。この距離は、縄文時代の人々の移動パターンをより現実的にモデル化する。
+
+隣接する2地点間の移動速度(km/h)は勾配$S = \tan\theta$に対して以下のように定義される：
+$$
+W = 6e^{-3.5|S+0.05|}
+$$
+
+この関数は、平坦な地形での最適歩行速度が約6km/hであり、急峻な地形では速度が指数的に低下することを表現している。
+
+\subsubsection{移動コストネットワークの構築}
+
+調査領域全体を5次メッシュコード（250m単位）でグリッド分割し、各グリッドの中心点を頂点とするネットワークを構築する。隣接セル間の移動コストは以下の手順で計算される：
+
+\begin{enumerate}
+\item 陸上移動：Tobler's Hiking Functionによる計算
+\item 海上移動：木造丸木船の移動速度4km/hを仮定
+\item 陸海境界：沿岸地形に応じて砂浜海岸は通常の50倍、岩石海岸は移動不可として設定
+\end{enumerate}
+
+最短経路距離は以下の再帰的更新式により求められる：
+$$
+C_u(v) \leftarrow \min\left(\{C_u(v)\}\cup \{C_u(w) + t_{w\rightarrow v} \mid w \in \mathcal{N}_v\}\right)
+$$
+
+ここで$t_{w\rightarrow v}$は頂点$w$から隣接セル$v$への移動コスト、$\mathcal{N}_v$は頂点$v$の隣接頂点集合である。
+
+任意の2点$s$, $s'$間の距離は、それぞれが属するグリッドの中心点$v_s$, $v_{s'}$のコストの対称化として定義される：
+$$
+d(s, s') := \frac{C_{v_s}(v_{s'}) + C_{v_{s'}}(v_s)}{2}
+$$
+
+\subsubsection{実装と計算効率}
+
+このモデルの推定結果を図3に示す。バンド幅パラメータ$h$の選択は推定精度に重要な影響を与える。本研究では$h = 14$を採用し、局所性と平滑性のバランスを取った。実データでの推定結果では、神津島産黒曜石が海岸部で高い構成比を示し、内陸部での信州産の優位性など、考古学的知見と整合的なパターンが観察された。
+
+この手法の利点は実装の簡潔性と計算効率の高さにあるが、不確実性の定量化ができない点が限界として挙げられる。
+
+\subsection{Kernel Stick-Breaking Process（KSBP）}
+
+Dunson and Park (2008)\cite{Dunson2008-dg}のKernel Stick-Breaking Processを多項分布データに拡張し、産地構成比の空間変動をノンパラメトリックベイズ的にモデル化した。このアプローチは、Dirichlet過程の拡張として位置$x$に依存する確率測度族に対する柔軟な事前分布を提供し、データ駆動的にクラスタ数を決定できる特性を持つ。
+
+\subsubsection{手法}
+
+ノンパラメトリックベイズの目的は、予測変数$x$に依存する確率分布族$\{G_x : x \in \mathcal{X}\}$に対して柔軟な事前分布を定義することである。従来のDirichlet過程$G \sim \text{DP}(\alpha G_0)$は、Sethuraman (1994)のstick-breaking表現により以下のように構成される：
+$$
+G = \sum_{h=1}^\infty p_h \delta_{\theta_h}, \quad p_h = V_h \prod_{l=1}^{h-1}(1 - V_l)
+$$
+ここで$V_h \sim \text{Beta}(1, \alpha)$、$\theta_h \sim G_0$である。
+
+KSBPはこの構成を空間的に拡張し、位置$x$に依存する重みを導入することで局所性を実現する。
+
+\subsubsection{KSBPの定式化}
+
+独立なランダム要素の無限列$\{ \Gamma_h, V_h, G_h^* \}_{h = 1}^{\infty}$を導入する：
+\begin{itemize}
+\item $\Gamma_h \overset{\text{iid}}{\sim} H$：空間的位置パラメータ（観測空間内の一様分布）
+\item $V_h \overset{\text{ind}}{\sim} \text{Beta}(1, \lambda)$：stick-breaking比率
+\item $G_h^* \overset{\text{iid}}{\sim} Q$：確率測度（ランダムなベース分布）
+\end{itemize}
+
+観測空間上で位置$x$に依存する確率測度$G_x$をstick-breaking表現で構成する：
+$$
+G_x = \sum_{h=1}^{\infty} \pi_h(x) G_h^*
+$$
+
+重み$\pi_h(x)$は空間的局所性を反映するよう以下で定義される：
+$$
+\pi_h(x) = W_h(x) \prod_{l < h} [1 - W_l(x)], \quad W_h(x) = V_h K(x, \Gamma_h)
+$$
+
+カーネル関数$K : \mathcal{X} \times \mathcal{L} \rightarrow [0, 1]$として、ガウスカーネルを採用する：
+$$
+K(x, \Gamma) = \exp\left\{-\frac{\|x - \Gamma\|^2}{2h^2}\right\}
+$$
+
+この構成により、$x$から遠い$\Gamma_h$には小さな重みしか与えられず、近傍の成分に集中した局所的な混合が実現される。
+
+\subsubsection{多項分布への拡張（Multinomial-KSBP）}
+
+本研究では、産地構成比の推定に適用するため、KSBPを多項分布データに拡張した。各クラスタ$h$における産地構成比$\theta_h$をディリクレ分布から生成する：
+$$
+\theta_h \mid \gamma_0 \sim \text{Dirichlet}\left(\tfrac{\gamma_0}{K}, \ldots, \tfrac{\gamma_0}{K}\right), \quad G_h^* = \delta_{\theta_h}
+$$
+
+位置$s$での産地構成比は無限混合として表現される：
+$$
+\pi(s) = \sum_{h=1}^{\infty} \pi_h(s) \theta_h
+$$
+
+観測データ$\mathbf{y}_i \in \mathbb{N}^K$は多項分布から生成される：
+$$
+\mathbf{y}_i \mid \pi(s_i) \sim \text{Multinomial}(N_i, \pi(s_i))
+$$
+
+\subsubsection{階層構造と補助変数}
+
+無限混合をサンプリング可能な形に分解するため、補助変数$z_i$を導入し、各観測点$s_i$について離散変数$z_i \in \{1,2,\ldots\}$を定義する：
+$$
+z_i \mid \mathbf{V}, \Gamma, s_i \sim \text{Categorical}(\pi_1(s_i), \pi_2(s_i), \ldots)
+$$
+$$
+\mathbf{y}_i \mid z_i, \{\theta_h\} \sim \text{Multinomial}(N_i, \theta_{z_i})
+$$
+
+モデルの完全な階層構造は以下のようになる：
+$$
+\begin{aligned}
+\Gamma_h &\sim H \\
+V_h &\sim \text{Beta}(1, \lambda) \\
+\theta_h &\sim \text{Dirichlet}\left(\tfrac{\gamma_0}{K}\mathbf{1}_K\right) \\
+\pi_h(s) &= V_h K_h(s) \prod_{l < h} [1 - V_l K_l(s)] \\
+z_i \mid s_i &\sim \text{Categorical}(\pi_1(s_i), \pi_2(s_i), \ldots) \\
+\mathbf{y}_i \mid z_i &\sim \text{Multinomial}(N_i, \theta_{z_i})
+\end{aligned}
+$$
+
+\subsubsection{MCMCアルゴリズム}
+
+効率的な事後推論のため、以下の完全条件付き分布を導出し、ギブスサンプリングを実装した：
+
+\textbf{1. $\boldsymbol{\theta}_h$の更新}：
+$$
+\boldsymbol{\theta}_h \mid \mathbf{z}, \mathbf{y} \sim \text{Dirichlet}\left(\frac{\gamma_0}{K}+S_{h1}, \ldots, \frac{\gamma_0}{K}+S_{hK}\right)
+$$
+ここで$S_{hk} := \sum_{i:z_i=h} y_{ik}$は各クラスタの産地別出土数の合計である。
+
+\textbf{2. $z_i$の更新}：
+$$
+P(z_i=h \mid \text{rest}) \propto \pi_h(s_i) \prod_{k=1}^{K}\theta_{hk}^{y_{ik}}
+$$
+
+\textbf{3. $V_h$の更新}：
+Walker (2007)\cite{Walker2007-aj}のslice samplingを用い、補助変数$u_i \sim \text{Uniform}(0,1)$により有限切断を実現する：
+$$
+V_h \mid \text{rest} \sim \text{Beta}(1+m_h, \lambda+r_h)
+$$
+ここで$m_h = \#\{i : z_i = h\}$、$r_h$は複雑な条件カウントである。
+
+\textbf{4. $\Gamma_h$の更新}：
+解析形が得られないため、ランダムウォークMetropolis-Hastings法を採用し、提案分布$\mathcal{N}(0,\sigma_\phi^{2}I_2)$を用いる。
+
+\subsubsection{実験結果と特徴}
+
+実データへの適用では、ハイパーパラメータを$\lambda=1$、$\gamma_0=0.1$として設定し、2000回のMCMCイテレーションを実行した。結果として、観測データの少ない箇所で事後標準偏差が大きくなり、推定の不確実性を適切に評価できることが確認された。
+
+KSBPの重要な特徴は、観測データがほとんどない地点でカーネルの距離に応じて不確実性が増大する挙動を示すことであり、これはNadaraya-Watson推定量の「最近傍の比率をそのままコピー」する挙動とは本質的に異なる。この特性により、考古学的解釈において重要な不確実性の定量化が可能となる。
+
+\subsection{NNGP多項ロジスティック回帰：空間変化係数モデル}
+
+本研究の主要な提案手法として、空間変化係数を持つ多項ロジスティック回帰モデルを開発した。このモデルは、従来の空間統計学におけるGaussian Process回帰をカテゴリカルデータに拡張し、各産地カテゴリごとに空間的に変化する係数ベクトルを導入することで、産地構成比の詳細な空間変動をモデル化する。
+
+\subsubsection{手法：空間変化係数モデル}
+
+各産地カテゴリ$k = 1,\ldots,K-1$ごとに、空間的に変化する係数ベクトルを導入する：
+$$
+\boldsymbol{\beta}_k(s) = (\beta_{0k}(s), \beta_{1k}(s), \ldots, \beta_{pk}(s))^\top
+$$
+
+線形予測子は共変量$\mathbf{W}(s,x)$（位置、標高、傾斜、産地からの距離など）と係数の内積として定義される：
+$$
+\eta_k(s,x) = \mathbf{W}(s,x)^\top \boldsymbol{\beta}_k(s)
+$$
+
+産地構成比は多項ロジスティック変換（softmax）により構成比制約$\sum_k \pi_k = 1$を自動的に満たすよう定義される：
+$$
+\pi_k(s,x) = \frac{\exp\{\eta_k(s,x)\}}{1 + \sum_{\ell=1}^{K-1} \exp\{\eta_\ell(s,x)\}}, \quad k = 1,\ldots,K-1
+$$
+$$
+\pi_K(s,x) = \frac{1}{1 + \sum_{\ell=1}^{K-1} \exp\{\eta_\ell(s,x)\}}
+$$
+
+\subsubsection{Gaussian Process事前分布}
+
+空間的連続性を表現するため、各係数$\beta_{jk}(s)$に独立なGaussian Process事前分布\cite{Gelfand2003}を設定する：
+$$
+\beta_{jk}(\cdot) \sim \mathcal{GP}(0, C(\cdot, \cdot; \boldsymbol{\phi}_{jk}))
+$$
+
+共分散関数として指数型関数を採用する：
+$$
+C(s, s'; \boldsymbol{\phi}) = \sigma^2 \exp\left(-\frac{\|s - s'\|_2}{\phi}\right)
+$$
+
+ここで$\sigma^2$は分散パラメータ、$\phi$は空間相関の範囲パラメータである。この定式化により、近接する地点の係数値は高い相関を持ち、距離とともに相関が減衰する。
+
+\subsubsection{計算効率化：Nearest-Neighbor Gaussian Process}
+
+従来のGaussian Processは$n \times n$共分散行列の逆行列計算により$O(n^3)$の計算量を要求し、大規模データでは実用的でない。この問題を解決するため、Datta et al. (2016)\cite{Datta2016}のNearest-Neighbor Gaussian Process (NNGP)近似を採用した。
+
+NNGPでは各点$s_i$について、近傍$M$個の点のみを参照することで局所的な空間依存構造を近似する。具体的には、順序付けられた位置$s_1, \ldots, s_n$に対して：
+$$
+p(\boldsymbol{\beta}(\mathbf{s})) = p(\boldsymbol{\beta}(s_1)) \prod_{i=2}^n p(\boldsymbol{\beta}(s_i) \mid \boldsymbol{\beta}(\mathbf{s}_{N(i)}))
+$$
+
+ここで$\mathbf{s}_{N(i)} \subset \{s_1, \ldots, s_{i-1}\}$は$s_i$の$M$個の最近傍点集合である。この近似により計算量は$O(nM^3)$に削減され、$M \ll n$の場合に大幅な効率化が実現される。
+
+\subsubsection{Pólya-Gamma Data Augmentation}
+
+多項ロジスティック回帰の尤度は解析的に扱いにくいため、Polson et al. (2013)\cite{Polson2013}のPólya-Gamma data augmentationを用いて正規分布に変換する。各観測$i$および産地$k$に対してPólya-Gamma変数$\omega_{ik}$を導入する：
+$$
+\omega_{ik} \sim \text{PG}(y_{ik}, 0)
+$$
+
+この拡張により、多項分布の尤度は以下のように表現される：
+$$
+p(\mathbf{y}_i \mid \boldsymbol{\beta}, \boldsymbol{\omega}_i) \propto \exp\left(\sum_{k=1}^{K-1} \kappa_{ik} \eta_{ik} - \frac{1}{2}\sum_{k=1}^{K-1} \omega_{ik} \eta_{ik}^2\right)
+$$
+
+ここで$\kappa_{ik} = y_{ik} - N_i/2$は変換された応答変数である。
+
+\subsubsection{MCMCアルゴリズム}
+
+Pólya-Gamma変換により、各パラメータの完全条件付き分布は解析的に求めることができる：
+
+\textbf{1. 係数ベクトルの更新}：
+各$\beta_{jk}(s_i)$について：
+$$
+\beta_{jk}(s_i) \mid \cdot \sim \mathcal{N}(\mu_{ijk}, \sigma_{ijk}^2)
+$$
+
+ここで$\mu_{ijk}$と$\sigma_{ijk}^2$はNNGP構造と観測データから決定される。
+
+\textbf{2. Pólya-Gamma変数の更新}：
+$$
+\omega_{ik} \mid \eta_{ik} \sim \text{PG}(y_{ik}, \eta_{ik})
+$$
+
+\textbf{3. ハイパーパラメータの更新}：
+共分散パラメータ$\boldsymbol{\phi}_{jk}$はMetropolis-Hastings法により更新される。
+
+\subsubsection{実装と性能}
+
+近傍サイズ$M=15$として実装し、224遺跡に対して効率的な推定を実現した。NNGPにより$O(224^3) \approx 1.1 \times 10^7$から$O(224 \times 15^3) \approx 7.6 \times 10^5$への計算量削減を達成し、実用的な計算時間での収束が可能となった。
+
+このモデルの特長は、各地点での係数推定により産地構成比に影響を与える要因の空間変動を詳細に分析できることである。例えば、神津島からの距離の効果が海岸部と内陸部で異なる影響を持つことや、地形要因の効果が地域によって変化することなど、従来の一様係数モデルでは捉えられない複雑な空間パターンの解明が可能となった。
+
+\section{まとめと今後の課題}
+
+本研究では、黒曜石の産地構成比の空間分布を推定するために、4つの統計的手法を開発・実装した。第一に、非斉次ポアソン過程による遺跡の存在確率モデルを構築し、発掘調査バイアスの統計的補正を可能にした。第二に、Nadaraya-Watson推定量を用いた頻度主義的な空間補間を実施し、Tobler's Hiking Functionによる地形考慮距離を導入した。第三に、Kernel Stick-Breaking Processを多項分布データに拡張し、ベイズノンパラメトリック推定による不確実性の定量化を実現した。第四に、空間変化係数を持つ多項ロジスティック回帰モデルにNearest-Neighbor Gaussian Process近似を適用し、計算効率と推定精度を両立させた。
+
+実データへの適用結果として、神津島産黒曜石が海岸部で高い構成比を示すこと、信州産が内陸部で優位であることなど、従来の考古学的知見と整合的なパターンが確認された。特にNNGPモデルでは、局所的な産地構成比の空間パターンを捉えることができ、地域ごとの流通経路の違いを定量的に分析できる可能性が示された。
+
+今後の課題として、以下の点が挙げられる。第一に、線形効果と非線形効果の分離である。産地からの距離に基づく減衰効果を明示的にモデル化することで、より解釈可能なモデルを構築できると考えられる。第二に、時期間の依存構造のモデル化である。Dynamic Gaussian Processを導入することで、時間的な連続性を考慮し、データのsparsityを緩和することが期待される。第三に、共変量ごとの回帰係数の詳細な解釈とカーネルの選択・最適化である。ハイパーパラメータの自動調整により、モデルの予測性能を向上させることが可能である。
+
+本研究の成果は、考古学データに対する高度な空間統計手法の適用可能性を示すとともに、今後のモデル拡張の基礎となる枠組みを提供した。
+
+\bibliographystyle{unsrt} %参考文献出力スタイル
+\bibliography{reference}
+
+\end{document}
+
+\newpage
+
+\section*{A 付録}
+\subsection*{A.1 付録の書き方}
+必要に応じて、謝辞の後に付録を記述することができる。付録の見出しは本文の
+章節と同様の形式とするが、見出しは「A 付録」とする。
+
+\end{document}
