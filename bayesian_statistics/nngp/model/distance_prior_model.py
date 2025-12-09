@@ -24,7 +24,11 @@ from bayesian_statistics.models.preprocessing.data_preprocessor import (
     ObsidianDataPreprocessor,
 )
 
-from .multinomial_model import MultinomialDataset, MultinomialNNGPConfig
+from .multinomial_model import (
+    MultinomialDataset,
+    MultinomialNNGPConfig,
+    _build_kernel_list,
+)
 from .nngp import FactorCache
 from .sample import (
     LocalNNGPKernel,
@@ -50,6 +54,12 @@ class DistancePriorConfig(MultinomialNNGPConfig):
     alpha: float = 1.0  # Weight on source importance
     source_weights: Optional[Sequence[float]] = None  # Importance weights (K,)
     lambda_fixed: Optional[Sequence[float]] = None  # Fixed scaling (K-1,) or None
+
+    # Per-feature prior means for covariates
+    prior_mean_by_feature: Optional[Sequence[Optional[float]]] = None
+    # Length must be p+1 (intercept + covariates)
+    # prior_mean_by_feature[0] must be None (intercept uses distance prior)
+    # prior_mean_by_feature[j] for j>=1: prior mean for covariate j-1
 
 
 @dataclass
@@ -85,6 +95,12 @@ class DistancePriorDataset:
     tau: float  # Temperature parameter
     alpha: float  # Importance weight exponent
     source_weights_full: np.ndarray  # (K,) Full weights including baseline
+
+    # Prior means for covariate features (constant across space)
+    prior_mean_covariate_features: Optional[np.ndarray] = None
+    # shape: (p,) where p is number of covariates (excluding intercept)
+    # prior_mean_covariate_features[j-1] = prior mean for covariate j (j>=1)
+    # None means all covariates have zero prior mean (backward compatible)
 
     def num_categories(self) -> int:
         return int(self.counts.shape[1])
@@ -158,11 +174,20 @@ class DistancePriorResults:
                             # Conditional mean
                             mu_cond = A_grid @ beta_sites_j  # (n_grid,)
 
-                            # Add prior mean for intercept
+                            # Add prior mean adjustment for intercept
                             if j == 0:
-                                prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
-                                prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
+                                prior_mean_grid = (
+                                    self.dataset.prior_mean_intercept_grid[k]
+                                )
+                                prior_mean_sites = (
+                                    self.dataset.prior_mean_intercept_sites[k]
+                                )
                                 mu_cond += prior_mean_grid - (A_grid @ prior_mean_sites)
+                            # NOTE: Covariate prior means (j >= 1) are constant across space,
+                            # so they cancel out in the conditional distribution:
+                            # mu_cond = A_grid @ (beta_sites + c) = A_grid @ beta_sites + A_grid @ c
+                            # Adjustment: c - A_grid @ c = c - c = 0 (since A_grid @ 1 = 1)
+                            # Therefore, no adjustment needed for constant prior means.
 
                             # Sample from conditional
                             std_cond = np.sqrt(np.maximum(D_grid, 1e-12))
@@ -184,7 +209,9 @@ class DistancePriorResults:
                         # Add prior mean adjustment for intercept
                         if j == 0:
                             prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
-                            prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
+                            prior_mean_sites = self.dataset.prior_mean_intercept_sites[
+                                k
+                            ]
                             beta_mean[k, j] += prior_mean_grid - (
                                 A_grid @ prior_mean_sites
                             )
@@ -324,6 +351,7 @@ def prepare_distance_prior_dataset(
     alpha: float = 1.0,
     source_weights: Optional[Sequence[float]] = None,
     lambda_values: Optional[Sequence[float]] = None,
+    prior_mean_by_feature: Optional[Sequence[Optional[float]]] = None,
 ) -> DistancePriorDataset:
     """Prepare dataset with distance-based prior means.
 
@@ -351,6 +379,11 @@ def prepare_distance_prior_dataset(
         Source importance weights (length K-1). If None, use uniform weights.
     lambda_values
         Scaling factors for prior mean (length K-1). If None, use 1.0 for all.
+    prior_mean_by_feature
+        Optional prior means for each feature (length p+1).
+        prior_mean_by_feature[0] must be None (intercept uses distance prior).
+        prior_mean_by_feature[j] for j>=1: prior mean for covariate j-1.
+        If None, all covariates have zero prior mean (default).
 
     Returns
     -------
@@ -447,10 +480,34 @@ def prepare_distance_prior_dataset(
         lambda_vec = np.array(lambda_values, dtype=float)
 
     # Compute prior means for intercept: mu_k(s) = lambda_k * g_k(s)
-    prior_mean_intercept_sites = (
-        lambda_vec[:, np.newaxis] * g_sites.T
-    )  # (K-1, n_sites)
+    prior_mean_intercept_sites = lambda_vec[:, np.newaxis] * g_sites.T  # (K-1, n_sites)
     prior_mean_intercept_grid = lambda_vec[:, np.newaxis] * g_grid.T  # (K-1, n_grid)
+
+    # Process prior means for covariate features
+    p = len(variable_names)  # Number of covariates
+    p_plus_1 = p + 1  # Including intercept
+
+    prior_mean_covariates = None
+    if prior_mean_by_feature is not None:
+        # Validate length
+        if len(prior_mean_by_feature) != p_plus_1:
+            raise ValueError(
+                f"prior_mean_by_feature must have length {p_plus_1} "
+                f"(1 intercept + {p} covariates), got {len(prior_mean_by_feature)}"
+            )
+
+        # Validate intercept is None
+        if prior_mean_by_feature[0] is not None:
+            raise ValueError(
+                "prior_mean_by_feature[0] must be None "
+                "(intercept uses distance prior, not a constant prior mean)"
+            )
+
+        # Extract covariate prior means (skip intercept at index 0)
+        covariate_means = [
+            0.0 if x is None else float(x) for x in prior_mean_by_feature[1:]
+        ]
+        prior_mean_covariates = np.array(covariate_means, dtype=float)
 
     return DistancePriorDataset(
         # Base fields from MultinomialDataset
@@ -475,7 +532,76 @@ def prepare_distance_prior_dataset(
         tau=tau,
         alpha=alpha,
         source_weights_full=w,  # Save the full weight array (K,) for reuse
+        # Covariate prior means
+        prior_mean_covariate_features=prior_mean_covariates,
     )
+
+
+def _build_prior_means_for_category(
+    category_idx: int,
+    dataset: DistancePriorDataset,
+    n_sites: int,
+) -> list[Optional[np.ndarray]]:
+    """Build prior mean arrays for each feature of a given category.
+
+    This helper function constructs the prior mean specification for all features
+    (intercept + covariates) of a specific category, to be passed to update_beta_category.
+
+    Parameters
+    ----------
+    category_idx
+        Category index (0 to K-2).
+    dataset
+        Dataset containing prior mean information.
+    n_sites
+        Number of observation sites.
+
+    Returns
+    -------
+    list[Optional[np.ndarray]]
+        List of length p+1, where:
+        - Element 0: prior mean for intercept (shape (n_sites,), from distance prior)
+        - Element j (j>=1): prior mean for covariate j-1
+          - If prior_mean_covariate_features is None or value is 0: returns None (zero mean)
+          - Otherwise: returns constant array of shape (n_sites,) with the prior mean value
+
+    Examples
+    --------
+    >>> # Intercept uses distance prior, covariates use zero mean
+    >>> prior_means = _build_prior_means_for_category(0, dataset, 100)
+    >>> prior_means[0].shape  # (100,) - distance prior
+    >>> prior_means[1]  # None - zero mean for covariate 1
+
+    >>> # With non-zero covariate prior mean
+    >>> dataset.prior_mean_covariate_features = np.array([0.5, -0.3])
+    >>> prior_means = _build_prior_means_for_category(0, dataset, 100)
+    >>> prior_means[1]  # array([0.5, 0.5, ..., 0.5]) - constant prior mean
+    >>> prior_means[2]  # array([-0.3, -0.3, ..., -0.3])
+    """
+    p_plus_1 = dataset.design_matrix_sites.shape[1]
+    prior_means = []
+
+    for j in range(p_plus_1):
+        if j == 0:
+            # Intercept: use distance-based prior mean (spatial)
+            prior_means.append(dataset.prior_mean_intercept_sites[category_idx])
+        else:
+            # Covariate j-1 (since j=0 is intercept)
+            covariate_idx = j - 1
+
+            if dataset.prior_mean_covariate_features is None:
+                # No prior means specified: use zero mean
+                prior_means.append(None)
+            else:
+                mean_value = dataset.prior_mean_covariate_features[covariate_idx]
+                if mean_value == 0.0:
+                    # Explicit zero mean
+                    prior_means.append(None)
+                else:
+                    # Non-zero constant prior mean (replicated across all sites)
+                    prior_means.append(np.full(n_sites, mean_value, dtype=float))
+
+    return prior_means
 
 
 def run_mcmc_with_distance_prior(
@@ -522,31 +648,9 @@ def run_mcmc_with_distance_prior(
     else:
         lambda_vec = np.ones(K_minus_1, dtype=float)
 
-    # Build kernels
-    if kernel is None:
-        # Use config parameters to create isotropic kernels
-        kernels = [
-            LocalNNGPKernel(
-                lengthscale=config.kernel_lengthscale,
-                variance=config.kernel_variance,
-            )
-            for _ in range(p_plus_1)
-        ]
-    elif isinstance(kernel, LocalNNGPKernel):
-        # Single kernel provided, replicate for all features
-        kernels = [kernel] * p_plus_1
-    elif isinstance(kernel, Sequence):
-        # Sequence of kernels provided
-        kernels = list(kernel)
-        if len(kernels) != p_plus_1:
-            raise ValueError(
-                f"kernel sequence must have length {p_plus_1} (p+1), got {len(kernels)}"
-            )
-    else:
-        raise TypeError(
-            f"kernel must be None, LocalNNGPKernel, or Sequence[LocalNNGPKernel], "
-            f"got {type(kernel)}"
-        )
+    # Build kernels using the shared kernel construction logic
+    # This properly handles kernel_lengthscale_by_feature and kernel_variance_by_feature
+    kernels = _build_kernel_list(config, p_plus_1, kernel)
 
     # Build NNGP factors using FactorCache
     print("Building NNGP factors...")
@@ -595,11 +699,8 @@ def run_mcmc_with_distance_prior(
             kappa = counts[k] - 0.5 * totals
             kappa_tilde = kappa + omega * C
 
-            # 2. Sample beta_k with non-zero prior mean for intercept
-            prior_means = [
-                dataset.prior_mean_intercept_sites[k],  # j=0: intercept
-                *[None] * (p_plus_1 - 1),  # j>=1: covariates (zero mean)
-            ]
+            # 2. Sample beta_k with per-feature prior means
+            prior_means = _build_prior_means_for_category(k, dataset, n_sites)
 
             beta_k, eta_k = update_beta_category(
                 beta[k],
@@ -616,7 +717,10 @@ def run_mcmc_with_distance_prior(
             eta[k] = eta_k
 
         # Save samples
-        if iteration >= config.burn_in and (iteration - config.burn_in) % config.thinning == 0:
+        if (
+            iteration >= config.burn_in
+            and (iteration - config.burn_in) % config.thinning == 0
+        ):
             beta_samples[save_idx] = beta
             save_idx += 1
 
@@ -630,8 +734,6 @@ def run_mcmc_with_distance_prior(
         beta_samples=beta_samples,
         lambda_values=lambda_vec,
     )
-
-
 
 
 __all__ = [

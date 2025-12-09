@@ -1,0 +1,1178 @@
+\documentclass[xelatex, 8pt]{beamer}
+\mode<presentation>{\usetheme{Dresden}}
+% Boadilla
+\usecolortheme[RGB={22, 74, 132}]{structure}
+%\usefonttheme{professionalfonts}
+
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+%\renewcommand{\familydefault}{\sfdefault}
+
+% IPAexMincho
+% Noto Serif CJK JP
+
+\usepackage{tikz}
+\usetikzlibrary{intersections, calc, arrows.meta}
+
+%seagullいいね
+%
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{subcaption}  %図を横に配置してそれぞれにキャプションを追加
+
+% 定理環境で使う言葉を用意
+\theoremstyle{plain}
+\newtheorem{thm}{Theorem}
+\newtheorem*{thm*}{Theorem}
+
+\theoremstyle{definition}
+\newtheorem{dfn}{Definition}
+
+% フォントサイズの設定
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subbody}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subsubbody}{size=\normalsize}
+
+% リンクに関するセットアップ
+\usepackage{url}
+
+\usepackage[dvipdfmx]{color, hyperref}
+\usepackage{cite}
+
+% beamerではなぜかこれが必要らしい
+%\hypersetup{pdfborder={0 0 1}}
+\usepackage{xcolor}
+\hypersetup{
+	colorlinks=true,
+	citecolor=blue,
+	linkcolor=red,
+	urlcolor=orange,
+}
+
+%ページ番号
+\setbeamertemplate{footline}[frame number]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Metadata %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\hypersetup
+{
+	%Separate multiple authors by comma
+	pdfauthor={},
+	pdftitle={Spatial Statistical Models for Obsidian Source Composition: Distance Prior Approach},
+	pdfsubject={},
+	pdfkeywords={},
+	colorlinks=false
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Title related %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title[Contact: Aru Ohta (otaru1214@gmail.com)]{黒曜石産地構成比の空間統計モデル}
+\subtitle{Distance Prior NNGP Model}
+\date[2025]{2025-12-09}
+\author[M2 Aru Ohta]{M2 Aru Ohta}
+\institute[Kyoto University]{京都大学情報学研究科}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Presentation begins here %%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}
+{\Large 目次 Contents}
+ \tableofcontents
+\end{frame}
+
+\section{研究目的}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{研究目的}
+
+    \begin{itemize}
+        \item 目的：任意の地点における黒曜石の\textbf{産地構成比}を推定する
+        \\[2mm]
+        \item そのために、
+        \\[2mm]
+            \begin{itemize}
+                \item 黒曜石が出土した遺跡の位置
+                \item それぞれの遺跡から出土したそれぞれの産地の黒曜石の出土数
+            \end{itemize}
+            \\[2mm]
+            の2つをモデル化することを考える。
+            \\[2mm]
+            前者についてのモデルを\textbf{遺跡の存在確率モデル}、後者についてのモデルを\textbf{産地構成比モデル}とよぶことにする。
+            \\[2mm]
+            本発表では、後者の\textbf{産地構成比モデル}の改善について議論する。
+
+    \end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{データの基本情報}
+    \begin{itemize}
+        \item \textbf{対象領域}: 関東地方（北緯34-37度、東経138-141度）
+        \item \textbf{データ規模}:
+        \begin{itemize}
+            \item 遺跡数: 224箇所
+            \item 総出土数: 31,244点
+        \end{itemize}
+        \vspace{2mm}
+        \item \textbf{時期区分}:
+        \begin{itemize}
+            \item 早期・早々期 (約12,000年前〜7,000年前): 53遺跡
+            \item 前期 (約7,000年前〜5,500年前): 61遺跡
+            \item 中期 (約5,500年前〜4,500年前): 146遺跡
+            \item 後期 (約4,500年前〜3,500年前): 59遺跡
+            \item 晩期 (約3,500年前〜2,800年前): 18遺跡
+        \end{itemize}
+        \vspace{2mm}
+        \item \textbf{産地分類}:
+        \begin{itemize}
+            \item 神津島
+            \item 信州（和田峠、男女倉、諏訪、蓼科）
+            \item 箱根
+            \item 高原山
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+
+\section{これまでの提案手法}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{これまでのアプローチ}
+    これまで、産地構成比の推定に対して以下のモデルを検討してきた：
+
+    \vspace{3mm}
+
+    \begin{enumerate}
+        \item \textbf{線形回帰モデル (Baseline)}
+        \begin{itemize}
+            \item 構成比を対数比変換し、標高などの共変量のみで回帰。
+            \item 空間相関を考慮しないため、局所的な変動を捉えられない。
+        \end{itemize}
+        \item \textbf{Nadaraya-Watson推定量}
+        \begin{itemize}
+            \item 距離に応じた重み付け平均によるノンパラメトリック推定。
+            \item 直感的で安定しているが、共変量の効果を組み込みにくい。
+        \end{itemize}
+        \item \textbf{Multinomial KSBP (Kernel Stick-Breaking Process)}
+        \begin{itemize}
+            \item ノンパラメトリックベイズモデル。
+            \item 柔軟だが計算コストが高く、解釈が難しい場合がある。
+        \end{itemize}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{2-0. 線形回帰モデル(baseline)}
+
+    パラメトリックモデルの最も基本的な例として、線形回帰モデルを実装した。
+
+    \vspace{3mm}
+    \textbf{モデル定式化}:
+
+    遺跡$i$における産地$k$の観測カウントを$y_{ik}$とし、多項分布として
+    $$\mathbf{y}_i \sim \text{Multinomial}(N_i, \boldsymbol{\pi}(s_i))$$
+
+    $$\pi_k(s) = \frac{\exp(\eta_k(s))}{1 + \sum_{j=1}^{K-1} \exp(\eta_j(s))}$$
+
+    産地構成比に対してAdditive Log-Ratio (ALR)変換を適用し、単純な線形回帰モデルで推定。
+    $$\eta_k(s) = \log\left(\frac{\pi_k(s)}{\\pi_K(s)}\right) = \beta_{k0} + \beta_{k1} W(s) $$
+
+    ここで$W(s)$は共変量であり、ここでは標高を使う。
+\end{frame}
+
+\begin{frame}{2-0. 線形回帰モデル(baseline): 結果}
+    \begin{figure}
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_神津島.png}
+        \label{fig:sigma300}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_信州.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_箱根.png}
+        \label{fig:sigma1000}
+    \end{subfigure}
+        \hfill
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/fixed_bayesian_map_2_高原山.png}
+        \label{fig:sigma1500}
+    \end{subfigure}
+\end{figure}
+\end{frame}
+
+\begin{frame}{2-1. Nadaraya-Watsonモデル}
+    遺跡$i$における産地$k$の黒曜石出土数を$y_{ik}$とし、位置$s_i$での産地構成比$\pi_k(s_i) = y_{ik}/\sum_{k'}y_{ik'}$を観測値とする回帰問題として定式化する。
+
+    任意の位置$s$における産地$k$の構成比$\pi_k(s)$を推定するため、以下のNadaraya-Watson推定量を用いる：
+
+    $$\hat{\pi}_k(s) = \frac{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot y_{ik}}{\sum_{i=1}^{n_X} K_h(d(s,s_i)) \cdot \sum_{k'} y_{ik'}}$$
+
+    ここで$K_h(\cdot)$はバンド幅$h$を持つカーネル関数、$d(s,s')$は2点間の距離である。ここではガウスカーネル
+    $$K_h(d) = \frac{1}{h^2} \exp \left(-\frac{d^2}{2h^2}\right)$$
+    を採用し、各遺跡からの観測値を距離に応じて重み付け平均することで連続的な産地構成比の空間分布を推定する。
+\end{frame}
+
+\begin{frame}{2-1. Nadaraya-Watsonモデル}
+    カーネルに使用する距離関数については、従来のユークリッド距離に代わり、地形の起伏を考慮したTobler's Hiking Functionに基づく移動コスト距離を用いる。隣接する2地点間の移動速度(km/h)は勾配$S = \tan\theta$に対して
+    $$W = 6e^{-3.5|S+0.05|}$$
+    で与えられる。この速度から移動時間を計算し、領域全体を250mメッシュに分割してグラフネットワークを構築する。
+    各メッシュ間の移動コストを辺重みとし、全頂点間の最短経路問題として
+    $$C_u(v) \leftarrow \min\left(\{C_u(v)\}\cup \{C_u(w) + t_{w\rightarrow v} \mid w \in \mathcal{N}_v\}\right)$$
+    の更新式により計算する。海上移動は木造丸木船の速度4km/hを仮定し、沿岸部の地形に応じて上陸コストを設定する。
+
+\end{frame}
+
+\begin{frame}{2-1. Nadaraya-Watsonモデル: 結果}
+
+\begin{figure}\centering\includegraphics[width=0.9\textwidth]{fig/obsidian_ratio_all_NW.png}\caption{横軸が時期(左から順)、縦軸が産地（上から神津島、信州、箱根、高原山）を表す}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{2-1. Nadaraya-Watsonモデル: 結果}
+\begin{figure}\centering\includegraphics[width=1\textwidth]{fig/obsidian_ratio_0_神津島.png}\caption{早期・早々期、神津島}
+\end{figure}
+\end{frame}
+
+\begin{frame}{2-2. Multinomial KSBPモデル}
+    Dunson and Park (2008)のKernel Stick-Breaking Process (KSBP)を多項分布データに拡張し、産地構成比の空間変動をノンパラメトリックベイズ的にモデル化する。観測空間$\mathcal{X} \subset \mathbb{R}^d$上で、位置$x$に依存する確率測度$G_x$を以下のStick-breaking表現で構成する：
+
+    $$G_x = \sum_{h=1}^{\infty} \pi_h(x) G_h^*$$
+
+    ここで$\pi_h(x)$は位置$x$での第$h$成分の重み、$G_h^*$は各成分に対応する確率測度である。重み$\pi_h(x)$は空間的局所性を反映するよう以下で定義される：
+    $$\pi_h(x) = W_h(x) \prod_{l < h} [1 - W_l(x)]$$
+    $$W_h(x) = V_h K(x, \Gamma_h)$$
+
+    $V_h \sim \text{Beta}(1, \lambda)$はstick-breaking比率、$\Gamma_h \sim H$は空間的位置パラメータ、$K(x, \Gamma)$はガウスカーネル$\exp(-\|x-\Gamma\|^2/(2h^2))$である。
+\end{frame}
+
+\begin{frame}{2-2. Multinomial KSBPモデル}
+    各クラスタ$h$における産地構成比$\theta_h$をディリクレ分布から生成し、混合成分を離散測度$G_h^* = \delta_{\theta_h}$として設定する：
+    $$\theta_h \sim \text{Dirichlet}\left(\frac{\gamma_0}{K}, \ldots, \frac{\gamma_0}{K}\right)$$
+
+    位置$s$での産地構成比は無限混合として表現される：
+    $$\pi(s) = \sum_{h=1}^{\infty} \pi_h(s) \theta_h$$
+
+    観測データは多項分布に従うとモデル化し、補助変数$z_i$を導入してクラスタ割り当てを明示的に扱う：
+    $$z_i \mid s_i \sim \text{Categorical}(\pi_1(s_i), \pi_2(s_i), \ldots)$$
+    $$\mathbf{y}_i \mid z_i \sim \text{Multinomial}(N_i, \theta_{z_i})$$
+
+    この階層構造により、空間的に近い遺跡は類似したクラスタに割り当てられ、産地構成比の空間的連続性が自然に表現される。
+\end{frame}
+
+\begin{frame}{2-2. Multinomial KSBPモデル}
+    各パラメータの完全条件付き事後分布は以下のように導出される。産地構成比パラメータ$\theta_h$については、ディリクレ分布の共役性により
+    $$\theta_h \mid \mathbf{z}, \mathbf{y} \sim \text{Dirichlet}\left(\frac{\gamma_0}{K} + S_{h1}, \ldots, \frac{\gamma_0}{K} + S_{hK}\right)$$
+    が得られる。ここで$S_{hk} = \sum_{i:z_i=h} y_{ik}$はクラスタ$h$における産地$k$の総出土数である。
+
+    クラスタ割り当て$z_i$の事後分布はカテゴリカル分布となり、未規格化重み
+    $$w_{ih} = \pi_h(s_i) \prod_{k=1}^K \theta_{hk}^{y_{ik}}$$
+    を用いて$P(z_i = h \mid \text{rest}) = w_{ih}/\sum_g w_{ig}$で与えられる。
+
+    Stick-breaking比率$V_h$については、Walker (2007)のslice samplingを適用し、$V_h \mid \text{rest} \sim \text{Beta}(1+m_h, \lambda+r_h)$の更新式を得る。位置パラメータ$\Gamma_h$は解析的な事後分布が得られないため、ランダムウォークMetropolis-Hastings法を用いる。
+\end{frame}
+
+\begin{frame}{2-2. Multinomial KSBPモデル: 結果}
+
+KSBPモデルの早期・早々期の神津島、信州の結果。
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/KSBP_ratio_map_0_信州.png}
+        \caption{$\pi_k(s)$の事後平均: 早期・早々期、神津島}
+        \label{fig:pointprocess1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/KSBP_ratio_map_0_神津島.png}
+        \caption{$\pi_k(s)$の事後平均: 早期・早々期、信州}
+        \label{fig:pointprocess2}
+    \end{subfigure}
+    \label{fig:both-predictions}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{評価指標: Aitchison Distance}
+
+    Aitchison Distanceは、Compositional data間の距離を測定する標準的な指標。
+
+    $$d_A(\mathbf{x}, \mathbf{y}) = \sqrt{\sum_{i=1}^{D} \left(\ln\frac{x_i}{g(\mathbf{x})} - \ln\frac{y_i}{g(\mathbf{y})}\right)^2}$$
+
+    ここで$g(\mathbf{z}) = \left(\prod_{i=1}^D z_i\right)^{1/D}$は幾何平均。
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.4\linewidth]{fig/aichison_distance.png}
+        \caption{太田ら(2006)より引用。}
+        \label{fig:enter-label}
+    \end{figure}
+
+\end{frame}
+
+\begin{frame}{モデル比較}
+
+遺跡の産地構成比モデルの3つを、上記の評価指標で評価した結果 (Leave-one-out CV)
+
+\begin{table}
+  \centering
+  \begin{tabular}{l|cc}
+      \hline
+      Model & Aitchison Distance & 計算コスト（時間） \\
+      \hline
+      2-0 線形モデル(baseline) & 11.47 & \textbf{15s} \\
+      2-1 Nadaraya-Watson & \textbf{9.34} & 70s \\
+      2-2 Multinomial KSBP & 9.85 & 175s \\
+      \hline
+  \end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item いまのところ、Nadaraya-Watson推定量が最善。
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル}
+    より柔軟かつ解釈性の高いモデルとして、\textbf{空間多項ロジットモデル}を導入する。
+
+    \vspace{3mm}
+
+    \textbf{問題の定式化}:
+
+    \[
+    \mathcal{S}\subset\mathbb{R}^2,\quad
+    \mathcal{X}\subset\mathbb{R}^p,\quad
+    \Delta^{K-1}:=\{\boldsymbol{\pi}\in[0,1]^K:\ \sum_{k=1}^K \pi_k=1\}.
+    \]
+
+    観測データ：$s_i \in \mathcal{S} \quad i = 1, \ldots ,n$ において、
+
+    \begin{itemize}
+        \item 独立変数： $x_i\in\mathbb{R}^p$
+        \item 従属変数：$K$ 次元の非負整数ベクトル $y_i\in(\mathbb{N}\cup \{0\})^K$
+    \end{itemize}
+
+    を観測し、回帰関数 $\pi:\ \mathcal{S}\times\mathcal{X}\ \to\ \Delta^{K-1}$ を推定する。
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル: 空間変化係数}
+    \textbf{空間変化係数}
+
+    \begin{itemize}
+      \item 各産地カテゴリ $k = 1,\ldots,K-1$ ごとに、空間的に変化する係数ベクトル
+        \[
+          \boldsymbol{\beta}_k(s)
+          = \bigl(\beta_{0k}(s),\,\beta_{1k}(s),\,\ldots,\,\beta_{pk}(s)\bigr)^\top
+        \]
+        を導入する（$p$ ：共変量の数）。
+      \item これと共変量ベクトル
+        \[
+          \mathbf{W}(s,x) = \bigl(1,\,W_1(s,x),\,\ldots,\,W_p(s,x)\bigr)^\top
+        \]
+        を用いて、線形予測子を
+        \[
+          \eta_k(s,x) = \mathbf{W}(s,x)^\top \boldsymbol{\beta}_k(s)
+                       = \sum_{j=0}^{p} W_j(s,x)\,\beta_{jk}(s)
+        \]
+        と定義する。ここで $W_0(s,x) \equiv 1$ は切片項。
+      \item $\boldsymbol{\beta}_k(s)$ が地点 $s$ に依存して変化することで、
+            近接する地点では似た線形予測子が得られる
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル: 産地構成比のモデル}
+    \textbf{産地構成比のモデル}
+
+        \begin{itemize}
+        \item 線形予測子 $\eta_k(s,x)$ を softmax に通し、構成比
+        \[
+          \boldsymbol{\pi}(s,x)
+          = \bigl(\pi_1(s,x),\,\ldots,\,\pi_K(s,x)\bigr)^\top
+        \]
+        を得る。
+        \item 基準カテゴリを $K$ 番目に取ると、
+        \[
+          \pi_k(s,x)
+            = \frac{\exp\{\eta_k(s,x)\}}
+                   {1 + \sum_{\ell=1}^{K-1} \exp\{\eta_\ell(s,x)\}},
+          \qquad k = 1,\ldots,K-1,
+        \]
+        \[
+          \pi_K(s,x)
+            = \frac{1}
+                   {1 + \sum_{\ell=1}^{K-1} \exp\{\eta_\ell(s,x)\}}.
+        \]
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル: GP事前分布}
+
+    \textbf{$\boldsymbol{\beta}(s)$の事前分布：Gaussian Process}
+
+    \begin{itemize}
+      \item 各カテゴリ $k$・共変量成分 $j$ の組に対し、
+            回帰係数 $\beta_{jk}(s)$ はガウス過程に従うとする：
+        \[
+          \beta_{jk}(s) \sim \mathcal{GP}\bigl(0,\ C_\theta(s,s')\bigr).
+        \]
+      \item カーネル $C_\theta$ としてRBF（squared exponential）を採用：
+        \[
+          C_\theta(s,s')
+          = \sigma^2 \exp\!\left(-\frac{\|s - s'\|^2}{2\ell^2}\right),
+        \]
+        ここで $\sigma^2$、$\ell$ はハイパーパラメータ。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル: 計算上の課題}
+    \textbf{有限の観測点 $S = \{s_1,\ldots,s_n\}$ 上でのGP}
+
+    \begin{itemize}
+      \item 回帰係数ベクトル
+        \(
+          \boldsymbol{\beta}_{jk,S}
+          = \bigl(\beta_{jk}(s_1),\ldots,\beta_{jk}(s_n)\bigr)^\top
+        \)
+        は多変量正規分布に従う：
+        \[
+          \boldsymbol{\beta}_{jk,S}
+            \sim \mathcal{N}\bigl(\mathbf{0},\ K_\theta\bigr),
+          \qquad (K_\theta)_{ab} = C_\theta(s_a,s_b).
+        \]
+      \item ただ、この完全共分散構造を直接扱うのは計算的に重く、逆行列計算に$O(n^3)$の計算量が必要。
+      \item $\to$ \textbf{Nearest-Neighbor Gaussian Process (NNGP)} 近似を用いて計算効率化。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Nearest-Neighbor Gaussian Processによる近似}
+    \begin{itemize}
+      \item 観測点の集合 $S = \{s_1,\ldots,s_n\}$ に対し、ガウス過程の完全共分散を扱うと
+            $O(n^3)$ の計算が必要であり、現実的でない。
+      \item これに対し、Nearest-Neighbor Gaussian Process (NNGP) では、
+            各点 $s_i$ の近傍 $M$ 個だけを
+            近傍集合 $N_i$ として参照する。
+      \item これにより、条件付き分布
+        \[
+          p\bigl(\beta(s_i) \mid \beta(S_{N_i})\bigr)
+          \approx \mathcal{N}\bigl(a_i^\top \beta(S_{N_i}),\ d_i\bigr)
+        \]
+        を用いて、ガウス過程の空間的な依存構造を局所化できる。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Nearest-Neighbor Gaussian Processによる近似}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.4\linewidth]{fig/NNGP_demo.png}
+    \caption{NNGPの例。Jones et al. (2020)より引用。}
+    \label{fig:placeholder}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{Nearest-Neighbor Gaussian Processによる近似}
+
+ここで $S_{N_i} := \{s_j : j \in N_i\}$、$M$ は固定の近傍数。
+$N_i \subset \{1,\ldots,i-1\},\ |N_i| \le M$として、近似を行う：
+
+   \[
+  \begin{aligned}
+  p(\beta(s_1),\ldots,\beta(s_n))
+   &= \prod_{i=1}^n
+        p\bigl(\beta(s_i)\mid\beta(s_{<i})\bigr), \\
+  p\bigl(\beta(s_i)\mid\beta(s_{<i})\bigr)
+   &= \mathcal{N}\Bigl(
+        C_\theta(s_i,S_{<i}) C_\theta(S_{<i},S_{<i})^{-1} \beta(S_{<i}),
+        \ \sigma_i^2
+      \Bigr) \\
+   &\approx
+      \mathcal{N}\Bigl(
+        C_\theta(s_i,S_{N_i}) C_\theta(S_{N_i},S_{N_i})^{-1} \beta(S_{N_i}),
+        \ d_i
+      \Bigr).
+  \end{aligned}
+  \]
+  \[
+  a_i = C_\theta(s_i,S_{N_i}) C_\theta(S_{N_i},S_{N_i})^{-1},\quad
+  d_i = C_\theta(s_i,s_i) - C_\theta(s_i,S_{N_i}) C_\theta(S_{N_i},S_{N_i})^{-1} C_\theta(S_{N_i},s_i).
+  \]
+
+\end{frame}
+
+\begin{frame}{計算量と近似の精度}
+    以上のNNGP近似を行うことで、$O(n^3)$から
+
+    \[
+       O(n M^3)
+    \]
+    と大幅に削減される（$M$ は近傍数）。
+
+    \begin{itemize}
+      \item $M$ を小さく保てば $O(n)$ に近いスケーリングが得られる。
+      \item 典型的には $M=10$--$30$ 程度で十分な精度が得られると報告されている。
+      \item 今回のNNGP近似（Vecchia 近似という）は元のガウス過程の分布と KL ダイバージェンスを最小化する性質を持つ。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル：結果}
+
+前期、中期、後期の神津島と信州の推定結果。
+    \begin{figure}
+    \centering
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin0_period1.png}
+        \label{fig:sigma300}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin0_period2.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin0_period3.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin1_period1.png}
+        \label{fig:sigma1000}
+    \end{subfigure}
+        \hfill
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin1_period2.png}
+        \label{fig:sigma1500}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.30\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig/obsidian_nngp_multinomial/nngp_multinomial_origin1_period3.png}
+        \label{fig:sigma700}
+    \end{subfigure}
+\end{figure}
+
+\end{frame}
+
+\begin{frame}{2-3. Multinomial NNGPモデル: 課題}
+
+    \textbf{通常のNNGPモデル（ゼロ平均GP）の課題}:
+    \begin{itemize}
+        \item 通常のGP（ゼロ平均）では、データがない領域で予測が「平均（またはゼロ）」に回帰する。
+        \item 考古学的には、データがない遠隔地では「距離減衰」に従って確率が下がることが期待されるが、標準的なGPではこれを表現しきれない。
+        \item データ疎地域において、考古学的に妥当な事前情報（産地からの距離）を組み込む必要がある。
+    \end{itemize}
+
+    \vspace{3mm}
+
+    $\to$ \textbf{Distance Prior NNGP} の提案へ
+
+\end{frame}
+
+
+\section{提案手法：Distance Prior NNGP}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{提案手法の動機}
+    \textbf{通常のNNGPモデル（ゼロ平均GP）の問題点}:
+
+    \begin{itemize}
+        \item ゼロ平均GPでは、データがない領域で予測が「平均（ゼロ）」に回帰する。
+        \item 考古学的には、遠隔地では「距離減衰」に従って確率が下がることが期待される。
+    \end{itemize}
+
+    \vspace{3mm}
+
+    \textbf{→提案手法のアイデア}:
+    \begin{itemize}
+        \item 距離情報を切片 $\beta_{0k}(s)$ の\textbf{事前平均}として組み込み階層な定式化を行う。
+        \item データがある場所 $\to$ 事後分布がデータに引っ張られ、局所的に調整。
+        \item データがない場所 $\to$ 事後分布が事前平均（距離モデル）に留まる。
+    \end{itemize}
+
+
+    \begin{tikzpicture}[>=stealth,scale=1.3]
+      % ---- 軸 ----
+      \draw[->,thick] (-0.2,0) -- (6.6,0) node[below right]{産地からの距離};
+      \draw[->,thick] (0,-0.2) -- (0,2.2) node[left]{比率};
+
+      % y=1 目盛り
+      \draw[-] (-0.06,1) -- (0.06,1);
+      \node[left] at (0,1){1};
+
+      % ---- 参照直線（黒の直線）----
+      % 左上から右下へ単調減少の基準線
+      \draw[thick] (0,1) -- (5.8,0.1);
+
+      % ---- 減少カーブ（青の線）----
+      % 手描き風のうねりを軽く入れた滑らかな曲線
+      \draw[ultra thick,blue!80]
+        plot[smooth] coordinates {
+          (0.00,1)  % 左端：基準直線に沿う入り
+          (1.00,0.80)  % 観測点
+          (1.40,0.95)
+          (1.80,1.20)  % 観測点
+          (2.20,1.05)
+          (2.50,0.90)
+          (2.80,0.80)  % 観測点
+          (3.20,0.65)
+          (3.50,0.55)
+          (3.80,0.50)  % 観測点
+          (4.50,0.35)
+          (5.30,0.20)
+          (5.80,0.10)  % 右端：基準直線へ収束
+        };
+
+      % ---- 観測データ（前回と同じ座標）----
+      % 必要に応じて座標だけ差し替えればOK
+      \foreach \x/\y in {1/0.8,1.8/1.2,2.8/0.8,3.8/0.5}{
+        \fill[blue] (\x,\y) circle (2.6pt);
+      }
+    \end{tikzpicture}
+
+\end{frame}
+
+\begin{frame}{1. 距離に基づいた事前確率}
+    \textbf{距離に基づいて、事前確率を以下のように定義する}:
+
+    各地点 $s$ における産地 $k$ の「距離に基づくベースライン確率」$p_{0k}(s)$ を定義する。
+
+    \[
+    \begin{aligned}
+    p_{0k}(s)
+    &= \frac{\exp(-Z_{k}(s)/\tau + \alpha \log w_k)}{\sum_{\ell=1}^K \exp(-Z_{\ell}(s)/\tau + \alpha \log w_\ell)} \\
+    &= \frac{\exp(-Z_{k}(s)/\tau) \cdot \exp(\alpha \log w_k)}{\sum_{\ell=1}^K \exp(-Z_{\ell}(s)/\tau) \cdot \exp(\alpha \log w_\ell)} \\
+    &= \frac{\exp(-Z_{k}(s)/\tau) \cdot w_k^\alpha}{\sum_{\ell=1}^K \exp(-Z_{\ell}(s)/\tau) \cdot w_\ell^\alpha}
+    \end{aligned}
+    \]
+
+    \textbf{パラメータ}:
+    \begin{itemize}
+        \item $Z_k(s)$: 地点 $s$ から産地 $k$ への距離（Zスコア化）。小さいほど近い。
+        \item $\tau > 0$: \textbf{温度パラメータ}。小さいほど最近接産地への集中度が高まる。
+        \item $w_k > 0$: 産地 $k$ の\textbf{重要度}。考古学的に重要な産地に高い重みを付与。
+        \item $\alpha \ge 0$: \textbf{重要度の効き具合}。$\alpha=0$ なら重要度を無視し、純粋に距離のみ。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{1. 距離に基づいた事前確率}
+    {距離に基づいた事前確率 $p_{0k}(s)$ の性質}:
+
+    \begin{enumerate}
+        \item {正規化}: $\sum_{k=1}^K p_{0k}(s) = 1$ かつ $p_{0k}(s) \in (0,1)$。
+        \item {産地に近接する地点の優位性}: $Z_k(s)$ が最小（最も近い）の産地 $k$ で $p_{0k}(s)$ が最大となる傾向。
+        \item {温度による調整}:
+        \begin{itemize}
+            \item $\tau \to 0$: 最近接産地への確率が1に近づく（勝者総取り）。
+            \item $\tau \to \infty$: 全産地への確率が均等に近づく（距離の影響が消失）。
+        \end{itemize}
+        \item {重要度による調整}: $\alpha > 0$ のとき、$w_k$ が大きい産地の確率が相対的に上昇。
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{2. 距離に基づいた事前確率：GP事前確率への組み込み}
+
+    多項ロジットの識別性を保つため、基準カテゴリ $K$ との\textbf{対数比}に変換する：
+
+    \[
+    \begin{aligned}
+    g_k(s)
+    &:= \log p_{0k}(s) - \log p_{0K}(s) \\
+    &= \log \frac{p_{0k}(s)}{p_{0K}(s)} \\
+    &= \log \frac{\exp(-Z_{k}(s)/\tau) \cdot w_k^\alpha}{\exp(-Z_{K}(s)/\tau) \cdot w_K^\alpha} \\
+    &= \log \exp\left(\frac{-Z_{k}(s) + Z_{K}(s)}{\tau}\right) + \log \frac{w_k^\alpha}{w_K^\alpha} \\
+    &= \frac{Z_{K}(s) - Z_{k}(s)}{\tau} + \alpha \log \frac{w_k}{w_K}, \qquad k=1,\ldots,K-1.
+    \end{aligned}
+    \]
+
+    \begin{itemize}
+        \item $g_k(s)$ は「距離ベース確率で見たカテゴリ $k$ 対 $K$ の\textbf{相対優位度}」を表す。
+        \item $g_k(s) > 0$: カテゴリ $k$ の方が基準カテゴリ $K$ より近い（確率が高い）。
+        \item $g_k(s) < 0$: 基準カテゴリ $K$ の方が近い。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{3. 距離に基づいた事前確率：GP事前確率への組み込み}
+
+    各カテゴリ $k=1,\ldots,K-1$ について、線形予測子を次のように定義する：
+
+    \[
+    \begin{aligned}
+    \eta_k(s)
+    &= \mathbf{W}(s)^\top \boldsymbol{\beta}_k(s) \\
+    &= \sum_{j=0}^{p} W_j(s) \beta_{jk}(s) \\
+    &= \beta_{0k}(s) + \sum_{j=1}^{p} W_j(s) \beta_{jk}(s),
+    \end{aligned}
+    \]
+
+    ここで：
+    \begin{itemize}
+        \item $\boldsymbol{\beta}_k(s) = (\beta_{0k}(s), \beta_{1k}(s), \ldots, \beta_{pk}(s))^\top$ は空間的に変化する係数ベクトル
+        \item $\mathbf{W}(s) = (1, W_1(s), \ldots, W_p(s))^\top$ は共変量ベクトル（先頭は切片1）
+        \item $\beta_{0k}(s)$ は切片項、$\beta_{jk}(s)$ ($j \ge 1$) は共変量係数
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{3. 距離に基づいた事前確率：GP事前確率への組み込み}
+
+    基準カテゴリ $K$ のロジットはゼロ（$\eta_K(s) \equiv 0$）。全カテゴリの確率は softmax により：
+
+    \[
+    \begin{aligned}
+    \pi_k(s)
+      &= \frac{\exp(\eta_k(s))}
+               {\exp(\eta_K(s)) + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s))} \\
+      &= \frac{\exp(\eta_k(s))}
+               {1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s))},
+      \qquad k = 1,\ldots,K-1, \\
+    \pi_K(s)
+      &= \frac{\exp(\eta_K(s))}
+               {1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s))} \\
+      &= \frac{1}
+               {1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s))}.
+    \end{aligned}
+    \]
+
+\end{frame}
+
+\begin{frame}{3. 距離に基づいた事前確率：GP事前確率への組み込み}
+    \textbf{アイデア}: 距離情報を切片 $\beta_{0k}(s)$ の\textbf{事前平均}として組み込む。
+
+    \vspace{3mm}
+
+    距離情報を使って、以下のように切片項の事前確率を定義する:
+
+    \[
+    \begin{aligned}
+    \beta_{0k}(\cdot)
+    &\sim \operatorname{GP}\bigl(\mu_k(\cdot), C_{\theta_k}(\cdot, \cdot)\bigr), \\
+    \text{ここで} \quad \mu_k(s)
+    &= \lambda_k \cdot g_k(s) \\
+    &= \lambda_k \left( \frac{Z_{K}(s) - Z_{k}(s)}{\tau} + \alpha \log \frac{w_k}{w_K} \right).
+    \end{aligned}
+    \]
+
+    ハイパーパラメータ:
+    \begin{itemize}
+        \item $\lambda_k$: \textbf{距離事前の強さ}を制御するスケーリング係数（通常 $\lambda_k \approx 1.0$）。
+        \item $C_{\theta_k}(s, s')$: 共分散関数（RBFカーネルなど）。
+    \end{itemize}
+
+    \vspace{3mm}
+
+    切片以外の共変量の係数 $\beta_{jk}(s)$（$j=1,\ldots,p$）は従来通りゼロ平均のGPとする：
+
+    $$
+    \beta_{jk}(\cdot) \sim \operatorname{GP}\bigl(0, C_{\theta_k}(\cdot, \cdot)\bigr), \quad j=1,\ldots,p.
+    $$
+\end{frame}
+
+\begin{frame}{3. 共分散関数}
+    \textbf{RBF カーネル}:
+
+    $C_{\theta}$ は基本的には RBF（squared exponential）カーネルを使用する：
+
+    $$
+    C_{\theta}(s, s') = \sigma^2 \exp\left(-\frac{\|s - s'\|^2}{2\ell^2}\right).
+    $$
+
+    \textbf{ハイパーパラメータ}:
+    \begin{itemize}
+        \item $\sigma^2$: GPの分散。空間的な変動の大きさを制御。
+        \item $\ell$: 長さスケール。空間的な相関の範囲を制御。
+    \end{itemize}
+
+    \vspace{3mm}
+
+    カテゴリ別・共変量別の設定:
+    \begin{itemize}
+        \item 各カテゴリ $k$、共変量 $j$ ごとに異なるハイパーパラメータを設定する。
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{4. モデルの解釈}
+
+    \begin{enumerate}
+        \item {切片 $\beta_{0k}(s)$ の事前平均} = $\lambda_k \cdot g_k(s)$（距離ベースの期待値）
+
+        $$
+        \beta_{0k}(s) \sim \operatorname{GP}\bigl(\lambda_k g_k(s), C_{\theta_k}(s, s')\bigr)
+        $$
+
+        \item データがある場所:
+        \begin{itemize}
+            \item 事後分布がデータに引っ張られ、$\beta_{0k}(s)$ が距離事前から局所的に調整される。
+            \item GPが「距離モデルからのズレ」を学習。
+        \end{itemize}
+
+        \item データがない場所:
+        \begin{itemize}
+            \item 事後分布が事前平均 $\lambda_k \cdot g_k(s)$ に留まり、距離事前が支配的。
+            \item 自然に「距離減衰」に従った予測が得られる。
+        \end{itemize}
+
+        \item →直感的には、距離効果をベースラインとし、その周りをGPが局所的に変動する。
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{5. モデルの推定手法}
+    \textbf{多項分布}:
+
+    遺跡 $i$ のカウントは多項分布に従う：
+
+    $$
+    \mathbf{y}_i \mid N_i, \boldsymbol{\pi}(s_i)
+      \sim \operatorname{Multinomial}\bigl(N_i, \boldsymbol{\pi}(s_i)\bigr).
+    $$
+
+    \vspace{3mm}
+
+    \textbf{対数尤度}:
+
+    $$
+    \log p(\mathbf{y} \mid \boldsymbol{\eta})
+    = \sum_{i=1}^n \sum_{k=1}^{K-1} y_{ik} \eta_k(s_i)
+       - \sum_{i=1}^n N_i \log\left(1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s_i))\right),
+    $$
+
+    ここで $\eta_k(s_i) = \mathbf{W}(s_i)^\top \boldsymbol{\beta}_k(s_i)$ である。
+\end{frame}
+
+\begin{frame}{6. Pólya–Gamma 補助変数}
+    \textbf{Pólya–Gamma 補助変数の導入}:
+
+    \[
+    \begin{aligned}
+    \frac{(\exp(\psi))^a}{(1+\exp(\psi))^b}
+      &= 2^{-b} \exp(\kappa \psi)
+        \int_0^\infty \exp\left(-\frac{\omega \psi^2}{2}\right)
+                     p_{\mathrm{PG}}(\omega \mid b,0)\,d\omega,
+    \end{aligned}
+    \]
+    ここで、 $\kappa = a - b/2$.
+
+    \vspace{3mm}
+
+    \textbf{多項ロジット尤度への適用}:
+
+    \[
+    \begin{aligned}
+    p(\mathbf{y}_i \mid \boldsymbol{\eta}(s_i))
+    &\propto \prod_{k=1}^{K-1} \exp(y_{ik} \eta_k(s_i))
+             \cdot \left(1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s_i))\right)^{-N_i} \\
+    &= \prod_{k=1}^{K-1} \frac{\exp(y_{ik} \eta_k(s_i))}{(1 + \exp(\eta_k(s_i)))^{N_i}}
+       \cdot \left(1 + \sum_{\ell=1}^{K-1} \exp(\eta_\ell(s_i))\right)^{-N_i}
+       \cdot \prod_{k=1}^{K-1} (1 + \exp(\eta_k(s_i)))^{N_i}.
+    \end{aligned}
+    \]
+\end{frame}
+
+\begin{frame}{6. Pólya–Gamma 補助変数：尤度の変形}
+    補助変数 $\omega_{ik} \sim \operatorname{PG}(N_i, \eta_k(s_i))$ を導入すると：
+
+    \[
+    \begin{aligned}
+    p(\mathbf{y}_i \mid \boldsymbol{\eta}(s_i), \boldsymbol{\omega}_i)
+    &\propto \prod_{k=1}^{K-1} \exp\left(\kappa_{ik} \eta_k(s_i) - \frac{\omega_{ik} \eta_k(s_i)^2}{2}\right),
+    \end{aligned}
+    \]
+    ここで、 $\kappa_{ik} = y_{ik} - N_i/2$.
+
+    \vspace{3mm}
+
+    \textbf{対数尤度}:
+
+    \[
+    \begin{aligned}
+    \log p(\mathbf{y}_i \mid \boldsymbol{\eta}(s_i), \boldsymbol{\omega}_i)
+    &= \sum_{k=1}^{K-1} \left(\kappa_{ik} \eta_k(s_i) - \frac{\omega_{ik} \eta_k(s_i)^2}{2}\right) + \text{const} \\
+    &= \sum_{k=1}^{K-1} \left(\kappa_{ik} \mathbf{W}(s_i)^\top \boldsymbol{\beta}_k(s_i)
+       - \frac{\omega_{ik}}{2} (\mathbf{W}(s_i)^\top \boldsymbol{\beta}_k(s_i))^2\right) + \text{const}.
+    \end{aligned}
+    \]
+
+    $\eta_k(s_i)$ について\textbf{二次形式}となり、GP事前と組み合わせるとガウス型の完全条件付き分布が得られる。
+\end{frame}
+
+\begin{frame}{7. ギブスサンプラー：事後分布の分解}
+    \textbf{完全データの事後分布}:
+
+    \[
+    \begin{aligned}
+    p(\boldsymbol{\beta}, \boldsymbol{\omega} \mid \mathbf{y}, \mathbf{W}, \boldsymbol{\mu})
+    &\propto p(\mathbf{y} \mid \boldsymbol{\beta}, \boldsymbol{\omega}, \mathbf{W})
+             p(\boldsymbol{\omega} \mid \boldsymbol{\beta}, \mathbf{W})
+             p(\boldsymbol{\beta} \mid \boldsymbol{\mu}) \\
+    &= \prod_{i=1}^n p(\mathbf{y}_i \mid \boldsymbol{\beta}, \boldsymbol{\omega}_i, \mathbf{W})
+       \prod_{i=1}^n \prod_{k=1}^{K-1} p(\omega_{ik} \mid \boldsymbol{\beta}, \mathbf{W})
+       \prod_{k=1}^{K-1} \prod_{j=0}^{p} p(\boldsymbol{\beta}_{jk} \mid \boldsymbol{\mu}_k),
+    \end{aligned}
+    \]
+    ここで、 $\boldsymbol{\mu}$ は事前平均（$\lambda_k g_k$ から構成された固定された変数）。
+
+    \vspace{3mm}
+
+    \textbf{ギブスサンプラーの2ステップ}:
+
+    \begin{enumerate}
+        \item \textbf{$\boldsymbol{\omega}$ のサンプリング}：
+        $$
+        \omega_{ik} \mid \mathbf{y}, \boldsymbol{\beta}
+        \sim \operatorname{PG}\bigl(N_i, \eta_k(s_i)\bigr), \quad \eta_k(s_i) = \mathbf{W}(s_i)^\top \boldsymbol{\beta}_k(s_i).
+        $$
+
+        \item \textbf{$\boldsymbol{\beta}$ のサンプリング}：Vecchia近似(NNGP)で各 $\beta_{jk}(s_i)$ をサンプリング。
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{7. $\beta_{jk}(s_i)$ の完全条件付き分布：設定}
+    \textbf{線形予測子の分解}:
+
+    \[
+    \begin{aligned}
+    \eta_k(s_i)
+    &= \mathbf{W}(s_i)^\top \boldsymbol{\beta}_k(s_i) \\
+    &= \sum_{j=0}^{p} W_j(s_i) \beta_{jk}(s_i) \\
+    &= w_{ij} \beta_{jk}(s_i) + \sum_{j' \neq j} W_{j'}(s_i) \beta_{j'k}(s_i) \\
+    &=: w_{ij} \beta_{jk}(s_i) + \eta_k^{(-j)}(s_i),
+    \end{aligned}
+    \]
+    ここで、:
+    \begin{itemize}
+        \item $w_{ij} = W_j(s_i)$ （$j=0$ なら $w_{i0}=1$）
+        \item $\eta_k^{(-j)}(s_i) = \eta_k(s_i) - w_{ij} \beta_{jk}(s_i)$ （成分 $j$ を除いた線形予測子）
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{7. $\beta_{jk}(s_i)$ の完全条件付き分布：尤度項}
+    \textbf{Pólya–Gamma拡大後の対数尤度}:
+
+    \[
+    \begin{aligned}
+    \log p(\mathbf{y}_i \mid \beta_{jk}(s_i), \text{rest})
+    &\propto \kappa_{ik} \eta_k(s_i) - \frac{\omega_{ik}}{2} \eta_k(s_i)^2 \\
+    &= \kappa_{ik} \left(w_{ij} \beta_{jk}(s_i) + \eta_k^{(-j)}(s_i)\right)
+       - \frac{\omega_{ik}}{2} \left(w_{ij} \beta_{jk}(s_i) + \eta_k^{(-j)}(s_i)\right)^2 \\
+    &= \kappa_{ik} w_{ij} \beta_{jk}(s_i) + \kappa_{ik} \eta_k^{(-j)}(s_i) \\
+    &\quad - \frac{\omega_{ik}}{2} \left(w_{ij}^2 \beta_{jk}(s_i)^2 + 2 w_{ij} \beta_{jk}(s_i) \eta_k^{(-j)}(s_i) + (\eta_k^{(-j)}(s_i))^2\right) \\
+    &= \kappa_{ik} w_{ij} \beta_{jk}(s_i) - \frac{\omega_{ik} w_{ij}^2}{2} \beta_{jk}(s_i)^2
+       - \omega_{ik} w_{ij} \beta_{jk}(s_i) \eta_k^{(-j)}(s_i) + \text{const}.
+    \end{aligned}
+    \]
+\end{frame}
+
+\begin{frame}{7. $\beta_{jk}(s_i)$ の完全条件付き分布：NNGP事前}
+    \textbf{Vecchia 近似によるGP事前}:
+
+    \textbf{切片の場合}（$j=0$）:
+
+    \[
+    \begin{aligned}
+    \beta_{0k}(s_i) \mid \boldsymbol{\beta}_{0k}(S_{N_i})
+      &\sim \mathcal{N}\Bigl(
+        \mu_k(s_i) + a_i^\top \bigl[\boldsymbol{\beta}_{0k}(S_{N_i}) - \boldsymbol{\mu}_k(S_{N_i})\bigr),
+        d_i
+      \Bigr),
+    \end{aligned}
+    \]
+    ここで、:
+    \begin{itemize}
+        \item $\mu_k(s_i) = \lambda_k g_k(s_i)$ ：事前平均
+        \item $\boldsymbol{\mu}_k(S_{N_i}) = (\lambda_k g_k(s_{i_1}),\ldots,\lambda_k g_k(s_{i_m}))^\top$ ：近傍点での事前平均
+        \item $a_i = C_\theta(s_i, S_{N_i}) C_\theta(S_{N_i}, S_{N_i})^{-1}$ ：NNGP 係数
+        \item $d_i = C_\theta(s_i, s_i) - C_\theta(s_i, S_{N_i}) C_\theta(S_{N_i}, S_{N_i})^{-1} C_\theta(S_{N_i}, s_i)$ ：条件付き分散
+    \end{itemize}
+
+    \textbf{共変量係数の場合}（$j \ge 1$）:
+
+    $$
+    \beta_{jk}(s_i) \mid \boldsymbol{\beta}_{jk}(S_{N_i})
+      \sim \mathcal{N}\bigl(a_i^\top \boldsymbol{\beta}_{jk}(S_{N_i}),\, d_i\bigr).
+    $$
+\end{frame}
+
+\begin{frame}{7. 完全条件付き分布：平方完成（1/2）}
+    \textbf{尤度と事前分布から事後分布を求める}:
+
+    \[
+    \begin{aligned}
+    \log p(\beta_{jk}(s_i) \mid \text{rest})
+    &\propto \log p(\mathbf{y}_i \mid \beta_{jk}(s_i), \text{rest})
+             + \log p(\beta_{jk}(s_i) \mid \boldsymbol{\beta}_{jk}(S_{N_i})) \\
+    &\propto \kappa_{ik} w_{ij} \beta_{jk}(s_i) - \frac{\omega_{ik} w_{ij}^2}{2} \beta_{jk}(s_i)^2
+            - \omega_{ik} w_{ij} \beta_{jk}(s_i) \eta_k^{(-j)}(s_i) \\
+    &\quad - \frac{1}{2d_i} \left(\beta_{jk}(s_i) - m_i\right)^2,
+    \end{aligned}
+    \]
+    ここで、:
+    \begin{itemize}
+        \item 切片（$j=0$）: $m_i = \mu_k(s_i) + a_i^\top [\boldsymbol{\beta}_{0k}(S_{N_i}) - \boldsymbol{\mu}_k(S_{N_i})]$
+        \item 共変量（$j \ge 1$）: $m_i = a_i^\top \boldsymbol{\beta}_{jk}(S_{N_i})$
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{7. 完全条件付き分布：平方完成（2/2）}
+    二次項を展開して、平方完成を行う：
+
+    \[
+    \begin{aligned}
+    \log p(\beta_{jk}(s_i) \mid \text{rest})
+    &\propto - \frac{1}{2} \left(\omega_{ik} w_{ij}^2 + \frac{1}{d_i}\right) \beta_{jk}(s_i)^2 \\
+    &\quad + \left(\kappa_{ik} w_{ij} - \omega_{ik} w_{ij} \eta_k^{(-j)}(s_i) + \frac{m_i}{d_i}\right) \beta_{jk}(s_i) + \text{const}.
+    \end{aligned}
+    \]
+
+    \[
+    \begin{aligned}
+    \sigma_{\text{post}}^2
+    &= \frac{1}{\omega_{ik} w_{ij}^2 + d_i^{-1}}, \\
+    \mu_{\text{post}}
+    &= \sigma_{\text{post}}^2 \left(\kappa_{ik} w_{ij} - \omega_{ik} w_{ij} \eta_k^{(-j)}(s_i) + \frac{m_i}{d_i}\right).
+    \end{aligned}
+    \]
+
+    完全条件付き分布は正規分布になる:
+    $$
+    \beta_{jk}(s_i) \mid \text{rest}
+      \sim \mathcal{N}(\mu_{\text{post}}, \sigma_{\text{post}}^2).
+    $$
+\end{frame}
+
+\begin{frame}{8. モデルの全体像}
+
+    Distance Prior NNGP モデルの流れ:
+
+    \begin{enumerate}
+        \item {距離モデル}: Tobler's distance (物理的な移動距離) から $g_k(s)$ を計算
+            \[
+        \begin{aligned}
+        g_k(s)
+        &:= \log p_{0k}(s) - \log p_{0K}(s) \\
+        &= \frac{Z_{K}(s) - Z_{k}(s)}{\tau} + \alpha \log \frac{w_k}{w_K}
+        \end{aligned}
+        \]
+
+        \item {GP事前分布}: 切片の事前平均を $\lambda_k g_k(s)$ に設定
+        \item {観測モデル}:
+        $$ \eta_k(s) = \beta_{0k}(s) + \mathbf{W}_{rest}(s)^\top \boldsymbol{\beta}_{rest}(s) $$
+        $$ \mathbf{y}_i \sim \text{Multinomial}(N_i, \text{softmax}(\boldsymbol{\eta}(s_i))) $$
+
+        \item {推論}: NNGP近似とPolya-Gammaデータ拡張を用いたGibbsサンプリング
+    \end{enumerate}
+\end{frame}
+
+
+\section{実験・考察}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{実験設定}
+
+実データを用いて、提案手法のDistance Prior NNGPの検証を行った。
+
+\vspace{2mm}
+
+\textbf{距離事前分布のパラメータ}:
+\begin{itemize}
+    \item 温度パラメータ: $\tau = 0.5$
+    \item 重要度指数: $\alpha = 1.0$
+    \item 産地重み $w_k$: 神津島=2.0, 信州=1.0, 箱根=0.05, 高原山=0.05
+    \item 距離スケーリング係数: $\lambda_k = 1.0$ （全カテゴリ共通）
+\end{itemize}
+
+\vspace{2mm}
+
+\textbf{GPカーネルのパラメータ}（RBFカーネル）:
+\begin{itemize}
+    \item 切片: $\ell = 0.2$, $\sigma^2 = 0.1$
+    \item 共変量（産地距離）: $\ell = 1.0$, $\sigma^2 = 1.0$（神津島・信州）
+    \item 共変量（産地距離）: $\ell = 0.1$, $\sigma^2 = 0.1$（箱根・高原山）
+\end{itemize}
+
+\vspace{2mm}
+
+\textbf{MCMC設定}: 反復数=200, バーンイン=50, 近傍数$M$=40
+\end{frame}
+
+\begin{frame}{実験結果 (Placeholder)}
+    \begin{center}
+        \Huge [ここに実験結果の地図やグラフを挿入]
+    \end{center}
+    \vspace{5mm}
+    \begin{itemize}
+        \item データ疎地域での挙動の違い（距離減衰への回帰）
+        \item 予測精度の比較
+        \item 効果の分解（距離要因 vs 局所変動）
+    \end{itemize}
+\end{frame}
+
+
+\section{今後の展望}
+
+\begin{frame}
+{\Large 目次}
+ \tableofcontents[currentsection]
+\end{frame}
+
+\begin{frame}{今後の展望}
+    \begin{itemize}
+        \item \textbf{パラメータの学習}: 現在固定している $\lambda_k$ や $\tau$ をデータから学習する階層モデルへの拡張。
+        \item \textbf{距離依存分散}: 産地からの距離に応じてGPの分散（不確実性）を変化させるカーネルの導入。
+        \item \textbf{時代変化のモデリング}: 時代間の相関を考慮した時空間モデルへの拡張。
+    \end{itemize}
+\end{frame}
+
+
+\section*{参考文献}
+
+\begin{frame}{参考文献}
+    \bibliographystyle{plain}
+    \bibliography{ref}
+    % 実際の文献リストは .bib ファイルが必要ですが、ここではプレースホルダーとして記述
+    \begin{itemize}
+        \item Datta, A., et al. (2016). Hierarchical Nearest-Neighbor Gaussian Process Models for Large Geostatistical Datasets. \textit{JASA}.
+        \item Polson, N. G., et al. (2013). Bayesian Inference for Logistic Models Using Pólya–Gamma Latent Variables. \textit{JASA}.
+    \end{itemize}
+\end{frame}
+
+\end{document}
