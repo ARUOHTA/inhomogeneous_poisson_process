@@ -707,22 +707,143 @@ where:
 
 ---
 
-## 8. テスト計画
+## 8. テスト駆動開発（TDD）計画
 
-### 8.1 単体テスト
-- 各コンポーネントの個別動作確認
-- 既存 `ipp.py`, `multinomial_model.py` との結果比較
+### 8.1 テストファイル構成
 
-### 8.2 統合テスト
-- 小規模データでの MCMC 収束確認
-- ArviZ による診断
+```
+tests/nngp/model/marked_point_process/
+├── __init__.py
+├── conftest.py              # 共通フィクスチャ
+├── test_config.py           # 設定クラスのテスト
+├── test_dataset.py          # データセットクラスのテスト
+├── test_intensity.py        # 点過程コンポーネントのテスト
+├── test_sampler.py          # サンプラーのテスト
+├── test_consistency.py      # 既存モデルとの一致テスト【最重要】
+└── test_integration.py      # 統合テスト
+```
 
-### 8.3 検証実験
-- 既存ノートブック（`16_model_3rd.ipynb` など）のデータで実行
-- 点過程のみモデル、マークのみモデルとの比較
+### 8.2 単体テスト詳細
+
+#### `test_intensity.py`
+```python
+def test_sample_pseudo_absence_returns_valid_coords():
+    """偽不在点が有効なグリッド内に収まることを確認"""
+
+def test_sample_pseudo_absence_respects_thinning():
+    """1-q(s,t)の確率でthinningされることを確認"""
+
+def test_compute_q_is_sigmoid():
+    """q(s,t) = sigmoid(η)が正しく計算されることを確認"""
+```
+
+#### `test_sampler.py`
+```python
+def test_sample_omega_intensity_uses_b_equals_1():
+    """点過程用PG: b=1でサンプルされることを確認"""
+
+def test_sample_xi_marks_uses_b_equals_N_i():
+    """マーク用PG: b=N_iでサンプルされることを確認"""
+
+def test_update_lambda_star_posterior_params():
+    """λ* ~ Gamma(m0+n, r0+|D|)のパラメータが正しいことを確認"""
+
+def test_kappa_intensity_formula():
+    """κ_i = y_i - 1/2 が正しく計算されることを確認"""
+
+def test_kappa_tilde_marks_formula():
+    """κ̃_ik = y_ik - N_i/2 が正しく計算されることを確認"""
+```
+
+### 8.3 回帰テスト（既存モデルとの一致）【最重要】
+
+#### `test_consistency.py`
+```python
+def test_mark_update_matches_multinomial_model():
+    """
+    【最重要テスト】
+    点過程部分を無効化（U=空, λ*=固定）して、
+    マーク部分だけ更新した場合、
+    既存のmultinomial_model.run_mcmc()と同じ結果になることを確認。
+
+    手順:
+    1. 同じデータセットを準備
+    2. 同じシード、同じ設定で両モデルを実行
+    3. β_samples が数値誤差内で一致することを確認
+    """
+
+def test_point_process_nngp_factors_correct():
+    """
+    X∪U座標でNNGP因子を構築した場合、
+    既存のbuild_nngp_factorsと同じ結果になることを確認
+    """
+```
+
+### 8.4 統合テスト
+
+#### `test_integration.py`
+```python
+def test_full_mcmc_runs_without_error():
+    """小さいデータ（10遺跡、3カテゴリ）でMCMCが完走"""
+
+def test_posterior_samples_are_finite():
+    """全事後サンプルにNaN/Infがないことを確認"""
+
+def test_posterior_probabilities_sum_to_one():
+    """各地点で Σπ_k = 1 を確認"""
+
+def test_site_probability_in_valid_range():
+    """存在確率 q ∈ [0, 1] を確認"""
+```
+
+### 8.5 共通フィクスチャ（conftest.py）
+
+```python
+@pytest.fixture
+def small_dataset():
+    """テスト用の小規模データセット"""
+    # 10遺跡、3カテゴリ、100グリッド点
+
+@pytest.fixture
+def preprocessor_fixture():
+    """実データのpreprocessor（統合テスト用）"""
+
+@pytest.fixture
+def rng():
+    """再現可能な乱数生成器"""
+    return np.random.default_rng(42)
+```
+
+---
+
+## 9. TDD実装フェーズ
+
+### Phase 1: データ構造（テスト先行）
+1. `test_config.py` を書く
+2. `config.py` を実装してテストを通す
+3. `test_dataset.py` を書く
+4. `dataset.py` を実装してテストを通す
+
+### Phase 2: 点過程コンポーネント（テスト先行）
+5. `test_intensity.py` を書く
+6. `intensity.py` を実装してテストを通す
+
+### Phase 3: マークコンポーネント（回帰テスト重視）
+7. `test_consistency.py` の `test_mark_update_matches_multinomial_model` を書く
+8. `composition.py` を実装（既存コードのラッパー）
+9. 回帰テストが通ることを確認
+
+### Phase 4: 統合サンプラー
+10. `test_sampler.py` を書く
+11. `sampler.py` を実装
+12. `test_integration.py` で全体動作確認
+
+### Phase 5: 結果クラスと予測
+13. `results.py` を実装
+14. ノートブックでの動作確認
 
 ---
 
 *作成日: 2024-12-19*
-*更新日: 2024-12-19（理論文書修正の反映）*
+*更新日: 2024-12-19（テスト戦略追加、理論文書修正の反映）*
 *参照: CODEBASE_ANALYSIS.md, docs/sections/sec2-9.tex*
