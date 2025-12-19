@@ -1,0 +1,57 @@
+\documentclass[a4paper, 11pt]{article}
+
+% XeLaTeX + 日本語設定
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Pagella}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Serif CJK JP}
+
+% ページ設定
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% 数式
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+
+% 定理環境
+\theoremstyle{definition}
+\newtheorem{definition}{定義}[section]
+\newtheorem{theorem}{定理}[section]
+\newtheorem{proposition}{命題}[section]
+
+% 図表
+\usepackage{graphicx}
+
+% リンク
+\usepackage{hyperref}
+
+% タイトル
+\title{マーク付き点過程による黒曜石産地構成比のモデル化}
+\author{太田 阿留}
+\date{2024年12月20日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  本ノートでは、非斉次ポアソン過程（IPP）による遺跡存在確率モデルと、
+  NNGPによる産地構成比モデルを統合したマーク付き点過程モデルの理論的定式化を行う。
+\end{abstract}
+
+\tableofcontents
+
+\section{導入}
+% TODO
+
+\input{sections/sec2}
+\input{sections/sec3}
+\input{sections/sec4}
+\input{sections/sec5}
+\input{sections/sec6}
+\input{sections/sec7}
+\input{sections/sec8}
+\input{sections/sec9}
+
+\end{document}

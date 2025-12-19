@@ -1,0 +1,112 @@
+\section{階層ベイズモデルの全体構造}
+
+前節では，遺跡位置に対する時空間ポアソン点過程と，各遺跡のマーク（産地構成比）に対する多項ロジットモデルを，それぞれ個別に定式化した．本節では，これらを一つの階層ベイズモデルとして統合し，事前分布を含めた全体構造を明示する．
+
+まず，パラメータと潜在変数の集合を
+\[
+\Theta
+=
+\Bigl\{
+\lambda^*,\,
+\boldsymbol{\beta}_{\mathrm{int}},
+\{\boldsymbol{\beta}_k\}_{k=1}^{K-1},
+u_{\mathrm{int}}(\cdot,\cdot),
+\{u_k(\cdot,\cdot)\}_{k=1}^{K-1}
+\Bigr\}
+\]
+と書く．ここで，$u_{\mathrm{int}}$ および $u_k$ は時空間上のガウス過程（もしくはその NNGP 近似）とみなす．実際の計算では，観測点上での有限次元ベクトルとして扱うので，後で離散化した形に書き直す．
+
+観測データは，遺跡の位置と時期の集合 $X = \{(s_i,t_i)\}_{i=1}^{n_X}$ と，各遺跡でのマーク $\boldsymbol{y}_i$ の集合
+\[
+\mathcal{Y} = \{\boldsymbol{y}_i\}_{i=1}^{n_X}
+\]
+からなる．
+
+階層モデルの構造は，概念的には次のように書ける：
+
+\textbf{1.} 上位階層（ハイパーパラメータ）
+\[
+\lambda^* \sim \mathrm{Ga}(m_0,r_0),\qquad
+\boldsymbol{\beta}_{\mathrm{int}} \sim \mathcal{N}(\boldsymbol{b}_0^{\mathrm{int}}, B_0^{\mathrm{int}}),
+\]
+\[
+\boldsymbol{\beta}_k \sim \mathcal{N}(\boldsymbol{b}_0^{(k)}, B_0^{(k)}),\quad k=1,\dots,K-1.
+\]
+
+\textbf{2.} 潜在ガウス場（NNGP 近似）
+
+例えば，遺跡の潜在強度場について
+\[
+\boldsymbol{u}_{\mathrm{int}}
+=
+\bigl(u_{\mathrm{int}}(s_1,t_1),\dots,u_{\mathrm{int}}(s_{n_X},t_{n_X})\bigr)^\top
+\sim
+\mathcal{N}\bigl(\boldsymbol{0},\, Q_{\mathrm{int}}^{-1}\bigr),
+\]
+産地 $k$ に対する潜在場について
+\[
+\boldsymbol{u}_k
+=
+\bigl(u_k(s_1,t_1),\dots,u_k(s_{n_X},t_{n_X})\bigr)^\top
+\sim
+\mathcal{N}\bigl(\boldsymbol{0},\, Q_k^{-1}\bigr),
+\quad k=1,\dots,K-1,
+\]
+とする．ここで $Q_{\mathrm{int}}, Q_k$ は NNGP によって与えられるスパースな精度行列であり，距離に基づく共分散構造を近似しているものとする（ハイパーパラメータはここでは既知とみなす）．
+
+\textbf{3.} 遺跡位置の生成（点過程部分）
+
+強度関数
+\[
+\lambda(s,t)
+=
+\lambda^* \, q(s,t),
+\qquad
+q(s,t) =
+\frac{\exp\{\eta_{\mathrm{int}}(s,t)\}}{1+\exp\{\eta_{\mathrm{int}}(s,t)\}},
+\]
+\[
+\eta_{\mathrm{int}}(s,t)
+=
+\boldsymbol{w}_{\mathrm{int}}(s,t)^\top \boldsymbol{\beta}_{\mathrm{int}}
++ u_{\mathrm{int}}(s,t),
+\]
+に従い，
+\[
+X \mid \lambda^*, \boldsymbol{\beta}_{\mathrm{int}}, u_{\mathrm{int}}
+\sim \mathrm{IPP}(\lambda).
+\]
+
+\textbf{4.} マークの生成（多項ロジット部分）
+
+各遺跡 $(s_i,t_i)$ について，
+\[
+\eta_k(s_i,t_i)
+=
+\boldsymbol{w}_z(s_i,t_i)^\top \boldsymbol{\beta}_k
++ u_k(s_i,t_i),\quad k=1,\dots,K-1,
+\]
+\[
+\pi_k(s_i,t_i)
+=
+\frac{\exp\{\eta_k(s_i,t_i)\}}{1+\sum_{k'=1}^{K-1}\exp\{\eta_{k'}(s_i,t_i)\}},
+\quad
+\pi_K(s_i,t_i)
+=
+\frac{1}{1+\sum_{k'=1}^{K-1}\exp\{\eta_{k'}(s_i,t_i)\}},
+\]
+と定義し，
+\[
+\boldsymbol{y}_i
+\mid
+N_i,\,
+\{\boldsymbol{\beta}_k\},\,
+\{u_k\}
+\sim
+\mathrm{Multinomial}\bigl(N_i,\ \boldsymbol{\pi}(s_i,t_i)\bigr),
+\qquad
+i=1,\dots, n_X,
+\]
+とする．
+
+このように，点過程部分とマーク部分は，それぞれに固有の潜在場 $u_{\mathrm{int}}$ と $\{u_k\}$ を持ちつつ，時空間上の同じ位置 $(s_i,t_i)$ で評価される．後者は NNGP によって効率的に扱われる．

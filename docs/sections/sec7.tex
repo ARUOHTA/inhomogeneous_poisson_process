@@ -1,0 +1,66 @@
+\section{ギブスサンプリングアルゴリズム（まとめ）}
+
+以上をまとめると，本 joint モデルのギブスサンプリングは概略次のようになる：
+
+\textbf{1.} 初期値
+\[
+\lambda^{*(0)},\ \boldsymbol{\beta}_{\mathrm{int}}^{(0)},\ \boldsymbol{u}_{\mathrm{int}}^{(0)},
+\ \{\boldsymbol{\beta}_k^{(0)},\boldsymbol{u}_k^{(0)}\}_{k=1}^{K-1},
+\ \boldsymbol{\omega}^{(0)},\ \Xi^{(0)},\ U^{(0)}
+\]
+を適当に設定する．
+
+\textbf{2.} 各反復 $\tau = 1,\dots,T$ で：
+
+\textbf{(a) 偽不在の更新}
+\[
+U^{(\tau)} \sim \mathrm{IPP}\bigl(\lambda^{*(\tau-1)}(1-q^{(\tau-1)})\bigr)
+\]
+を Poisson thinning によってサンプルする．
+
+\textbf{(b) 点過程側 Polya--Gamma の更新}
+\[
+\omega_i^{(\tau)}
+\sim
+\mathrm{PG}\bigl(1,\ \eta_{\mathrm{int},i}^{(\tau-1)}\bigr),
+\quad i=1,\dots,n_X+n_U^{(\tau)}.
+\]
+
+\textbf{(c) $(\boldsymbol{\beta}_{\mathrm{int}},\boldsymbol{u}_{\mathrm{int}})$ の更新}
+\[
+\theta_{\mathrm{int}}^{(\tau)}
+=
+\begin{pmatrix}
+\boldsymbol{\beta}_{\mathrm{int}}^{(\tau)} \\
+\boldsymbol{u}_{\mathrm{int}}^{(\tau)}
+\end{pmatrix}
+\sim
+\mathcal{N}\bigl(\boldsymbol{m}_{\mathrm{int}}, V_{\mathrm{int}}\bigr),
+\]
+ただし $\boldsymbol{m}_{\mathrm{int}}, V_{\mathrm{int}}$ は $\boldsymbol{\omega}^{(\tau)}, X, U^{(\tau)}$ から計算する．
+
+\textbf{(d) $\lambda^*$ の更新}
+\[
+\lambda^{*(\tau)} \sim \mathrm{Ga}\bigl(m_0 + n^{(\tau)},\ r_0 + |\mathcal{D}|\bigr),
+\]
+ここで $n^{(\tau)} = n_X + n_U^{(\tau)}$．
+
+\textbf{(e) マーク側 Polya--Gamma の更新}
+
+各 $i,k$ について
+\[
+\xi_{ik}^{(\tau)} \sim \mathrm{PG}\bigl(N_i,\ \eta_{ik}^{(\tau-1)}\bigr).
+\]
+
+\textbf{(f) 各カテゴリ $k$ の $(\boldsymbol{\beta}_k,\boldsymbol{u}_k)$ の更新}
+\[
+\theta_k^{(\tau)}
+=
+\begin{pmatrix}
+\boldsymbol{\beta}_k^{(\tau)} \\
+\boldsymbol{u}_k^{(\tau)}
+\end{pmatrix}
+\sim
+\mathcal{N}\bigl(\boldsymbol{m}_k, V_k\bigr),
+\]
+ただし $\boldsymbol{m}_k, V_k$ は $\Xi^{(\tau)}, \mathcal{Y}, X$ から計算する．

@@ -1,0 +1,268 @@
+\section{完全条件付き分布：点過程部分}
+
+\subsection{\texorpdfstring{$(\boldsymbol{\beta}_{\mathrm{int}}, \boldsymbol{u}_{\mathrm{int}})$}{(β\_int, u\_int)} の完全条件付き分布}
+
+点過程部分で導入した擬似尤度は
+\[
+L_{\mathrm{int}}
+\propto
+\exp\left\{
+-\frac{1}{2}
+(\boldsymbol{\eta}_{\mathrm{int}} - \boldsymbol{z})^\top
+\Omega
+(\boldsymbol{\eta}_{\mathrm{int}} - \boldsymbol{z})
+\right\},
+\]
+\[
+\boldsymbol{\eta}_{\mathrm{int}}
+=
+W_{\mathrm{int}}\boldsymbol{\beta}_{\mathrm{int}} + \boldsymbol{u}_{\mathrm{int}},
+\quad
+\Omega = \mathrm{diag}(\omega_1,\dots,\omega_n),
+\quad
+\boldsymbol{z}=\left(\frac{\kappa_1}{\omega_1},\dots,\frac{\kappa_n}{\omega_n}\right)^\top,
+\quad
+\kappa_i = y_i - \frac12.
+\]
+
+事前分布は
+\[
+\boldsymbol{\beta}_{\mathrm{int}}
+\sim
+\mathcal{N}(\boldsymbol{b}_0^{\mathrm{int}}, B_0^{\mathrm{int}}),
+\qquad
+\boldsymbol{u}_{\mathrm{int}}
+\sim
+\mathcal{N}(\boldsymbol{0}, Q_{\mathrm{int}}^{-1}),
+\]
+とする（$Q_{\mathrm{int}}$ は NNGP から得られる精度行列）．
+
+ここで
+\[
+\theta_{\mathrm{int}}
+=
+\begin{pmatrix}
+\boldsymbol{\beta}_{\mathrm{int}} \\
+\boldsymbol{u}_{\mathrm{int}}
+\end{pmatrix},
+\qquad
+\mu_0 =
+\begin{pmatrix}
+\boldsymbol{b}_0^{\mathrm{int}} \\
+\boldsymbol{0}
+\end{pmatrix},
+\qquad
+R_0 =
+\begin{pmatrix}
+(B_0^{\mathrm{int}})^{-1} & 0 \\
+0 & Q_{\mathrm{int}}
+\end{pmatrix},
+\]
+\[
+H =
+\bigl[\, W_{\mathrm{int}}\ \ I_n \,\bigr],
+\quad
+\boldsymbol{\eta}_{\mathrm{int}} = H \theta_{\mathrm{int}},
+\]
+と書くと，点過程部分＋事前分布に基づく $\theta_{\mathrm{int}}$ の「（比例）事後密度」は
+\[
+\begin{aligned}
+\log p(\theta_{\mathrm{int}} \mid \cdots)
+&=
+-\frac12 (\boldsymbol{\eta}_{\mathrm{int}} - \boldsymbol{z})^\top \Omega (\boldsymbol{\eta}_{\mathrm{int}} - \boldsymbol{z})
+-\frac12 (\boldsymbol{\beta}_{\mathrm{int}} - \boldsymbol{b}_0^{\mathrm{int}})^\top (B_0^{\mathrm{int}})^{-1}(\boldsymbol{\beta}_{\mathrm{int}} - \boldsymbol{b}_0^{\mathrm{int}}) \\
+&\hphantom{=}
+-\frac12 \boldsymbol{u}_{\mathrm{int}}^\top Q_{\mathrm{int}} \boldsymbol{u}_{\mathrm{int}}
++ \text{const}\\[1mm]
+&=
+-\frac12 (H\theta_{\mathrm{int}} - \boldsymbol{z})^\top \Omega (H\theta_{\mathrm{int}} - \boldsymbol{z})
+-\frac12 (\theta_{\mathrm{int}} - \mu_0)^\top R_0 (\theta_{\mathrm{int}} - \mu_0)
++ \text{const}.
+\end{aligned}
+\]
+
+右辺を $\theta_{\mathrm{int}}$ について二乗完成する．まず
+\[
+(H\theta_{\mathrm{int}} - \boldsymbol{z})^\top \Omega (H\theta_{\mathrm{int}} - \boldsymbol{z})
+=
+\theta_{\mathrm{int}}^\top H^\top \Omega H \theta_{\mathrm{int}}
+- 2\theta_{\mathrm{int}}^\top H^\top \Omega \boldsymbol{z}
++ \boldsymbol{z}^\top \Omega \boldsymbol{z},
+\]
+\[
+(\theta_{\mathrm{int}} - \mu_0)^\top R_0 (\theta_{\mathrm{int}} - \mu_0)
+=
+\theta_{\mathrm{int}}^\top R_0 \theta_{\mathrm{int}}
+- 2\theta_{\mathrm{int}}^\top R_0 \mu_0
++ \mu_0^\top R_0 \mu_0.
+\]
+
+したがって
+\[
+\begin{aligned}
+\log p(\theta_{\mathrm{int}} \mid \cdots)
+&=
+-\frac12 \theta_{\mathrm{int}}^\top (H^\top \Omega H + R_0)\theta_{\mathrm{int}}
++ \theta_{\mathrm{int}}^\top (H^\top \Omega \boldsymbol{z} + R_0 \mu_0)
++ \text{const}.
+\end{aligned}
+\]
+
+さらに
+\[
+V_{\mathrm{int}}^{-1} = H^\top \Omega H + R_0,
+\qquad
+\boldsymbol{m}_{\mathrm{int}} =
+V_{\mathrm{int}}(H^\top \Omega \boldsymbol{z} + R_0 \mu_0),
+\]
+とおくと，
+\[
+\begin{aligned}
+&\theta_{\mathrm{int}}^\top V_{\mathrm{int}}^{-1}\theta_{\mathrm{int}}
+- 2\theta_{\mathrm{int}}^\top V_{\mathrm{int}}^{-1}\boldsymbol{m}_{\mathrm{int}}
+\\
+&=
+(\theta_{\mathrm{int}} - \boldsymbol{m}_{\mathrm{int}})^\top
+V_{\mathrm{int}}^{-1}
+(\theta_{\mathrm{int}} - \boldsymbol{m}_{\mathrm{int}})
+- \boldsymbol{m}_{\mathrm{int}}^\top V_{\mathrm{int}}^{-1}\boldsymbol{m}_{\mathrm{int}},
+\end{aligned}
+\]
+であり，上と係数を対応させると
+\[
+\log p(\theta_{\mathrm{int}} \mid \cdots)
+=
+-\frac12
+(\theta_{\mathrm{int}} - \boldsymbol{m}_{\mathrm{int}})^\top
+V_{\mathrm{int}}^{-1}
+(\theta_{\mathrm{int}} - \boldsymbol{m}_{\mathrm{int}})
++ \text{const},
+\]
+となる．
+
+したがって，
+\[
+\boxed{
+\theta_{\mathrm{int}} \mid \boldsymbol{\omega}, X,U
+\sim
+\mathcal{N}\bigl(\boldsymbol{m}_{\mathrm{int}}, V_{\mathrm{int}}\bigr)
+}
+\]
+であり，ここから $(\boldsymbol{\beta}_{\mathrm{int}},\ \boldsymbol{u}_{\mathrm{int}})$ を同時にサンプルすることができる．$V_{\mathrm{int}}$ は大きな行列だが，NNGP により $Q_{\mathrm{int}}$ がスパースであること，$H^\top \Omega H$ もスパース構造を持つことを用いて，反復解法などで効率的に扱うことを想定する．
+
+（必要であれば，$\theta_{\mathrm{int}}$ をブロックに分けて条件付き正規分布から逐次サンプルする書き方も可能だが，ここでは joint sampling の形で書いた．）
+
+\subsection{\texorpdfstring{$\lambda^*$}{λ*} の完全条件付き分布}
+
+$\lambda^*$ に関する項だけを取り出すと，
+\[
+p(\lambda^* \mid \cdots)
+\propto
+p(\lambda^*)\,
+\exp\{-\lambda^*|\mathcal{D}|\}
+(\lambda^*)^{n},
+\]
+事前分布を $\lambda^* \sim \mathrm{Ga}(m_0,r_0)$ としているので，
+\[
+p(\lambda^* \mid \cdots)
+\propto
+(\lambda^*)^{m_0-1} e^{-r_0\lambda^*}
+\times
+e^{-\lambda^*|\mathcal{D}|}
+(\lambda^*)^{n}.
+\]
+よって
+\[
+p(\lambda^* \mid \cdots)
+\propto
+(\lambda^*)^{m_0 + n - 1}
+\exp\{-(r_0+|\mathcal{D}|)\lambda^*\},
+\]
+となり，
+\[
+\boxed{
+\lambda^* \mid X,U
+\sim
+\mathrm{Ga}\bigl(m_0 + n,\ r_0 + |\mathcal{D}|\bigr).
+}
+\]
+
+\subsection{偽不在点過程 \texorpdfstring{$U$}{U} の完全条件付き分布}
+
+$U$ の完全条件付き分布は，
+\[
+p(U \mid X,\lambda^*,\boldsymbol{\beta}_{\mathrm{int}},\boldsymbol{u}_{\mathrm{int}})
+\propto
+p(X,U \mid \lambda^*, q),
+\]
+であり，先の計算から
+\[
+p(X,U \mid \lambda^*, q)
+=
+\exp\{-\lambda^*|\mathcal{D}|\}
+(\lambda^*)^{n}
+\prod_{i=1}^n
+q(s_i,t_i)^{y_i}(1-q(s_i,t_i))^{1-y_i}
+\]
+である．このうち $U$ に依存する部分だけを見ると
+\[
+\begin{aligned}
+p(U \mid \cdots)
+&\propto
+\exp\left\{
+-\lambda^*\iint_{\mathcal{D}} (1-q(s,t))\,ds\,dt
+\right\}
+(\lambda^*)^{n_U}
+\prod_{i=n_X+1}^{n}
+(1-q(s_i,t_i)).
+\end{aligned}
+\]
+これは
+\[
+U \mid \lambda^*, q \sim \mathrm{IPP}(\lambda^*(1-q))
+\]
+と一致している．したがって，完全条件付き分布は再び同じ非斉次ポアソン過程になっている：
+\[
+\boxed{
+U \mid \lambda^*, \boldsymbol{\beta}_{\mathrm{int}}, \boldsymbol{u}_{\mathrm{int}}
+\sim
+\mathrm{IPP}\bigl(\lambda^*(1-q)\bigr).
+}
+\]
+
+実際のサンプリングでは，従来どおり Poisson thinning を用いる：
+
+\begin{enumerate}
+\item $N \sim \mathrm{Poisson}(\lambda^*|\mathcal{D}|)$ をサンプルする．
+\item $j=1,\dots,N$ について，$(s_j,t_j) \sim \mathrm{Uniform}(\mathcal{D})$ を独立にサンプルし，$\eta_{\mathrm{int}}(s_j,t_j)$, $q(s_j,t_j)$ を計算する．
+\item $u_j \sim \mathrm{Uniform}(0,1)$ をサンプリングし，$u_j < 1-q(s_j,t_j)$ のときだけ $(s_j,t_j)$ を $U$ に採用する．
+\end{enumerate}
+
+これにより，$\mathrm{IPP}(\lambda^*(1-q))$ のサンプルが得られる．
+
+\subsection{Polya--Gamma 変数 \texorpdfstring{$\omega_i$}{ω\_i} の完全条件付き分布}
+
+Polson et al.\ (2013) の Theorem 1 によれば，
+\[
+\omega \sim \mathrm{PG}(b,0),\quad
+\psi \in \mathbb{R}
+\]
+に対して，
+\[
+p(\omega \mid \psi)
+\propto
+\exp\left(-\frac{\omega \psi^2}{2}\right)p(\omega)
+\]
+は $\mathrm{PG}(b,\psi)$ である．
+
+本モデルでは点過程部分で $b=1$ としていたので，
+\[
+\boxed{
+\omega_i \mid \eta_{\mathrm{int},i}
+\sim
+\mathrm{PG}\bigl(1,\ \eta_{\mathrm{int},i}\bigr),
+\quad
+\eta_{\mathrm{int},i} = \boldsymbol{w}_{\mathrm{int}}(s_i,t_i)^\top \boldsymbol{\beta}_{\mathrm{int}} + u_{\mathrm{int}}(s_i,t_i),
+}
+\]
+となる．ギブスサンプリングでは，各ステップで $\eta_{\mathrm{int},i}$ を更新した後に，この条件付き分布から $\omega_i$ を個別にサンプルすればよい．

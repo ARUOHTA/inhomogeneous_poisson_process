@@ -216,3 +216,21 @@ obsidian_data
 *.html
 output
 *.csv
+
+# Output directory
+out/
+
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.dvi
+*.xdv

@@ -1,0 +1,165 @@
+\section{完全条件付き分布：マーク部分}
+
+最後に，マーク（産地構成比）の NNGP 多項ロジット部分について，Polya--Gamma 拡張の形を用いた完全条件付き分布をまとめる．ここでは構造を明示することを主眼とし，導出は点過程部分と同型であるため要所のみ書く．
+
+\subsection{多項ロジットモデルの Polya--Gamma 形式}
+
+各遺跡 $i=1,\dots,n_X$ と各カテゴリ $k=1,\dots,K-1$ について，
+\[
+\eta_{ik} = \eta_k(s_i,t_i)
+= \boldsymbol{w}_z(s_i,t_i)^\top \boldsymbol{\beta}_k + u_k(s_i,t_i),
+\]
+\[
+\pi_{ik}
+=
+\frac{\exp\{\eta_{ik}\}}
+{1+\sum_{k'=1}^{K-1} \exp\{\eta_{ik'}\}},
+\quad
+\pi_{iK}
+=
+\frac{1}{1+\sum_{k'=1}^{K-1} \exp\{\eta_{ik'}\}},
+\]
+とおいた．多項尤度は
+\[
+p(\boldsymbol{y}_i \mid N_i,\{\eta_{ik}\})
+\propto
+\frac{\prod_{k=1}^K \exp\{y_{ik}\eta_{ik}\}}
+{\Bigl(\sum_{k'=1}^K \exp\{\eta_{ik'}\}\Bigr)^{N_i}},
+\]
+である．
+
+基準カテゴリ $K$ を固定すると，多項尤度は次のように変形できる：
+\[
+\begin{aligned}
+p(\boldsymbol{y}_i \mid N_i,\{\eta_{ik}\})
+&\propto
+\prod_{k=1}^{K-1} \exp\{y_{ik}\eta_{ik}\}
+\cdot
+\left(1 + \sum_{\ell=1}^{K-1} \exp\{\eta_{i\ell}\}\right)^{-N_i}.
+\end{aligned}
+\]
+ここで，各カテゴリ $k=1,\dots,K-1$ に対して独立に Polya--Gamma 恒等式を適用する．
+具体的には，$a = y_{ik}$, $b = N_i$ として
+\[
+\frac{(e^{\eta_{ik}})^{y_{ik}}}{(1+e^{\eta_{ik}})^{N_i}}
+=
+2^{-N_i} \exp\{\tilde{\kappa}_{ik} \eta_{ik}\}
+\int_0^\infty \exp\left\{-\frac{\xi_{ik} \eta_{ik}^2}{2}\right\}
+p(\xi_{ik} \mid N_i, 0)\, d\xi_{ik},
+\]
+\[
+\tilde{\kappa}_{ik} = y_{ik} - \frac{N_i}{2},
+\qquad
+\xi_{ik} \sim \mathrm{PG}(N_i, 0)
+\]
+を用いる．$\xi_{ik}$ を潜在変数として導入し，条件付けると，
+\[
+p(\boldsymbol{y}_i \mid N_i, \{\eta_{ik}\}, \{\xi_{ik}\})
+\propto
+\prod_{k=1}^{K-1}
+\exp\left\{
+\tilde{\kappa}_{ik} \eta_{ik} - \frac{\xi_{ik} \eta_{ik}^2}{2}
+\right\}.
+\]
+点過程部分と同様に二乗完成を行うと，
+\[
+\tilde{\kappa}_{ik} \eta_{ik} - \frac{\xi_{ik} \eta_{ik}^2}{2}
+=
+-\frac{\xi_{ik}}{2}
+\left(\eta_{ik} - \frac{\tilde{\kappa}_{ik}}{\xi_{ik}}\right)^2
++ \frac{\tilde{\kappa}_{ik}^2}{2\xi_{ik}},
+\]
+となる．後者は $\eta_{ik}$ に依存しないため無視できる．
+
+全遺跡についてまとめると，
+\[
+p(\mathcal{Y} \mid \{\boldsymbol{\beta}_k\},\{u_k\},\Xi)
+\propto
+\prod_{k=1}^{K-1}
+\exp\left\{
+-\frac12
+(\boldsymbol{\eta}_k - \boldsymbol{z}_k)^\top
+\Omega_k
+(\boldsymbol{\eta}_k - \boldsymbol{z}_k)
+\right\},
+\]
+という形に書ける．ここで，
+\begin{itemize}
+\item $\boldsymbol{\eta}_k = (\eta_{1k},\dots,\eta_{n_X k})^\top$
+\item $\Omega_k = \mathrm{diag}(\xi_{1k},\dots,\xi_{n_X k})$
+\item $\boldsymbol{z}_k = \left(\dfrac{\tilde{\kappa}_{1k}}{\xi_{1k}},\dots,\dfrac{\tilde{\kappa}_{n_X k}}{\xi_{n_X k}}\right)^\top$
+\item $\tilde{\kappa}_{ik} = y_{ik} - \dfrac{N_i}{2}$
+\end{itemize}
+である．
+
+\subsection{\texorpdfstring{$(\boldsymbol{\beta}_k, \boldsymbol{u}_k)$}{(β\_k, u\_k)} の完全条件付き分布}
+
+カテゴリ $k$ 固定で考える．$\boldsymbol{\eta}_k = W_z \boldsymbol{\beta}_k + \boldsymbol{u}_k$ と書く．ここで $W_z$ は，$\boldsymbol{w}_z(s_i,t_i)^\top$ を行ベクトルに持つ設計行列である．事前分布は
+\[
+\boldsymbol{\beta}_k \sim \mathcal{N}(\boldsymbol{b}_0^{(k)}, B_0^{(k)}),
+\qquad
+\boldsymbol{u}_k \sim \mathcal{N}(\boldsymbol{0}, Q_k^{-1})
+\]
+とする（$Q_k$ は NNGP の精度行列）．
+
+点過程の場合と全く同様に，
+\[
+\theta_k =
+\begin{pmatrix}
+\boldsymbol{\beta}_k \\
+\boldsymbol{u}_k
+\end{pmatrix},
+\quad
+\mu_{0,k} =
+\begin{pmatrix}
+\boldsymbol{b}_0^{(k)} \\
+\boldsymbol{0}
+\end{pmatrix},
+\quad
+R_{0,k} =
+\begin{pmatrix}
+(B_0^{(k)})^{-1} & 0 \\
+0 & Q_k
+\end{pmatrix},
+\quad
+H_z = [\, W_z\ \ I_{n_X} \,],
+\]
+と置くと，$\theta_k$ に関する（比例）事後密度は
+\[
+\log p(\theta_k \mid \cdots)
+=
+-\frac12 (H_z\theta_k - \boldsymbol{z}_k)^\top \Omega_k (H_z\theta_k - \boldsymbol{z}_k)
+-\frac12 (\theta_k - \mu_{0,k})^\top R_{0,k}(\theta_k - \mu_{0,k})
++ \text{const},
+\]
+であり，二乗完成の結果，
+\[
+\boxed{
+\theta_k \mid \Xi, \mathcal{Y}, X
+\sim
+\mathcal{N}\bigl(\boldsymbol{m}_k, V_k\bigr),
+}
+\]
+\[
+V_k^{-1} = H_z^\top \Omega_k H_z + R_{0,k},
+\qquad
+\boldsymbol{m}_k = V_k \bigl(H_z^\top \Omega_k \boldsymbol{z}_k + R_{0,k}\mu_{0,k}\bigr).
+\]
+
+これを $k=1,\dots,K-1$ について繰り返すことで，全てのマーク・カテゴリに対する $(\boldsymbol{\beta}_k, \boldsymbol{u}_k)$ を更新できる．
+
+\subsection{Polya--Gamma 変数 \texorpdfstring{$\xi_{ik}$}{ξ\_ik} の完全条件付き分布}
+
+各 $(i,k)$ について，出てくる形は
+\[
+\exp\Bigl\{ \tilde{\kappa}_{ik}\eta_{ik} - \frac{\xi_{ik}\eta_{ik}^2}{2}\Bigr\}p(\xi_{ik}),
+\]
+という形になっているので，点過程部分と同じ議論から，
+\[
+\boxed{
+\xi_{ik} \mid \eta_{ik}, N_i
+\sim
+\mathrm{PG}\bigl(N_i,\ \eta_{ik}\bigr).
+}
+\]
+ここで $N_i$ は遺跡 $i$ での総出土数である．
