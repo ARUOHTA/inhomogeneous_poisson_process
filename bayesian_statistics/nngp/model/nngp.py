@@ -458,6 +458,92 @@ class FactorCache:
         return lambda_star * norm.cdf(m_f / np.sqrt(1.0 + v_f))
 
 
+def build_grid_interpolation_matrix(
+    site_coords: np.ndarray,
+    grid_coords: np.ndarray,
+    kernel,
+    M: int = 10,
+    jitter: float = 1e-8,
+) -> sp.csr_matrix:
+    """Build sparse interpolation matrix from sites to grid using NNGP.
+
+    For each grid point g, find M nearest sites and compute NNGP weights:
+        a_g = K(g, neighbors) @ inv(K(neighbors, neighbors))
+
+    Then the conditional mean at grid point g is: a_g @ beta_sites[neighbors]
+
+    Parameters
+    ----------
+    site_coords : np.ndarray
+        Site coordinates, shape (n_sites, 2).
+    grid_coords : np.ndarray
+        Grid coordinates, shape (n_grid, 2).
+    kernel
+        Kernel with K(X1, X2) method.
+    M : int
+        Number of nearest neighbors.
+    jitter : float
+        Jitter for numerical stability.
+
+    Returns
+    -------
+    sp.csr_matrix
+        Sparse interpolation matrix, shape (n_grid, n_sites).
+        A_grid @ beta_sites gives interpolated values at grid points.
+    """
+    site_coords = _ensure_2d(site_coords)
+    grid_coords = _ensure_2d(grid_coords)
+    n_sites = site_coords.shape[0]
+    n_grid = grid_coords.shape[0]
+
+    if n_sites == 0 or n_grid == 0:
+        return sp.csr_matrix((n_grid, n_sites))
+
+    M = min(M, n_sites)
+
+    # Build KDTree on sites
+    tree = KDTree(site_coords)
+
+    rows = []
+    cols = []
+    data = []
+
+    for g in range(n_grid):
+        g_coord = grid_coords[g : g + 1]
+
+        # Find M nearest sites
+        _, neighbor_idx = tree.query(g_coord, k=M)
+        neighbor_idx = np.atleast_1d(neighbor_idx.ravel())
+
+        if neighbor_idx.size == 0:
+            continue
+
+        # Compute NNGP weights
+        neighbor_coords = site_coords[neighbor_idx]
+        K_gN = kernel.K(g_coord, neighbor_coords).ravel()
+        K_NN = kernel.K(neighbor_coords, neighbor_coords)
+        K_NN += jitter * np.eye(K_NN.shape[0])
+
+        try:
+            L = np.linalg.cholesky(K_NN)
+            a_g = np.linalg.solve(L.T, np.linalg.solve(L, K_gN))
+        except np.linalg.LinAlgError:
+            # Fallback: uniform weights
+            a_g = np.ones(neighbor_idx.size) / neighbor_idx.size
+
+        rows.extend([g] * neighbor_idx.size)
+        cols.extend(neighbor_idx.tolist())
+        data.extend(a_g.tolist())
+
+    if len(rows) == 0:
+        return sp.csr_matrix((n_grid, n_sites))
+
+    return sp.csr_matrix(
+        (np.array(data), (np.array(rows), np.array(cols))),
+        shape=(n_grid, n_sites),
+    )
+
+
 def factors_to_csr(factors: NNGPFactors, n_cols: int) -> sp.csr_matrix:
     """Build CSR sparse matrix A whose row i has a_i at columns neighbor_idx[i]."""
     rows = []

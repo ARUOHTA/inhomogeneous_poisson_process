@@ -175,6 +175,7 @@ def prepare_marked_point_process_dataset(
     origins: Sequence[str],
     grid_subsample_ratio: float = 0.01,
     drop_zero_total_sites: bool = True,
+    intensity_variable_names: Optional[Sequence[str]] = None,
 ) -> MarkedPointProcessDataset:
     """Prepare dataset for the marked point process model.
 
@@ -193,6 +194,11 @@ def prepare_marked_point_process_dataset(
         Fraction of grid points to use (0 < ratio <= 1).
     drop_zero_total_sites
         Whether to drop sites with zero total count.
+    intensity_variable_names
+        Variable names to use as covariates for intensity model.
+        If None, only intercept is used.
+        Available variables include: "average_elevation", "average_slope_angle",
+        "cost_river", etc. (see preprocessor schema).
 
     Returns
     -------
@@ -204,8 +210,10 @@ def prepare_marked_point_process_dataset(
     >>> preprocessor = ObsidianDataPreprocessor(data_dir)
     >>> preprocessor.load_data()
     >>> origins = ["神津島", "信州", "箱根", "高原山", "その他"]
+    >>> # With covariates
     >>> dataset = prepare_marked_point_process_dataset(
-    ...     preprocessor, period=2, origins=origins
+    ...     preprocessor, period=2, origins=origins,
+    ...     intensity_variable_names=["average_elevation", "average_slope_angle"],
     ... )
     """
     import polars as pl
@@ -226,6 +234,26 @@ def prepare_marked_point_process_dataset(
             "ensure site identifiers are contiguous and start at zero."
         )
 
+    # Get intensity covariates from preprocessor
+    design_matrix_intensity_sites = None
+    design_matrix_intensity_grids_full = None
+
+    if intensity_variable_names is not None and len(intensity_variable_names) > 0:
+        W_grids, W_sites = preprocessor.create_explanatory_variables(
+            list(intensity_variable_names)
+        )
+        # Add intercept
+        n_sites_full = W_sites.shape[0]
+        design_matrix_intensity_sites = np.column_stack([
+            np.ones(n_sites_full),
+            W_sites,
+        ])
+        n_grids_full = W_grids.shape[0]
+        design_matrix_intensity_grids_full = np.column_stack([
+            np.ones(n_grids_full),
+            W_grids,
+        ])
+
     # Filter sites with zero total count
     if drop_zero_total_sites:
         mask = totals > 0
@@ -235,6 +263,8 @@ def prepare_marked_point_process_dataset(
         counts = counts[mask]
         totals = totals[mask]
         site_ids = site_ids[mask]
+        if design_matrix_intensity_sites is not None:
+            design_matrix_intensity_sites = design_matrix_intensity_sites[mask]
 
     # Prepare grid data
     elevation_df = preprocessor.df_elevation.sort(["y", "x"])
@@ -255,9 +285,14 @@ def prepare_marked_point_process_dataset(
         indices = np.linspace(0, n_grid_full - 1, keep, dtype=int)
         grid_coords = grid_coords_full[indices]
         valid_grids = (~is_sea_full[indices]) & is_valid_full[indices]
+        if design_matrix_intensity_grids_full is not None:
+            design_matrix_grid_intensity = design_matrix_intensity_grids_full[indices]
+        else:
+            design_matrix_grid_intensity = None
     else:
         grid_coords = grid_coords_full
         valid_grids = (~is_sea_full) & is_valid_full
+        design_matrix_grid_intensity = design_matrix_intensity_grids_full
 
     # Compute region from grid
     region = [
@@ -271,7 +306,9 @@ def prepare_marked_point_process_dataset(
         origins=list(origins),
         site_ids=site_ids,
         total_counts=totals,
+        design_matrix_intensity=design_matrix_intensity_sites,
         grid_coords=grid_coords,
+        design_matrix_grid_intensity=design_matrix_grid_intensity,
         valid_grids=valid_grids,
         region=region,
         period=period,

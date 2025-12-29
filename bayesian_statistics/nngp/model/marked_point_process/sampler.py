@@ -19,6 +19,7 @@ from tqdm import tqdm
 from bayesian_statistics.nngp.model.nngp import (
     FactorCache,
     NNGPFactors,
+    build_grid_interpolation_matrix,
     build_nngp_factors,
     order_points_morton,
 )
@@ -187,8 +188,6 @@ class MarkedPointProcessResults:
         elif location == "grid":
             if self.dataset.grid_coords is None:
                 raise ValueError("No grid coordinates in dataset")
-            if self.factor_cache is None:
-                raise ValueError("No factor cache available for grid prediction")
 
             n_grid = len(self.dataset.grid_coords)
             n_samples = self.beta_int_samples.shape[0]
@@ -199,9 +198,19 @@ class MarkedPointProcessResults:
             if W_grid is None:
                 W_grid = np.ones((n_grid, 1))
 
-            # Interpolate beta_int to grid using NNGP conditional mean
-            # A_grid @ beta_sites gives the conditional mean at grid points
-            A_grid_list = self.factor_cache.A_grid_all()
+            # Handle NaN in design matrix (invalid grid points)
+            # Replace NaN with 0 for computation, then mask the result
+            W_grid_clean = np.nan_to_num(W_grid, nan=0.0)
+
+            # Build NNGP interpolation matrix from sites to grid
+            # This is done once for all features (same spatial structure)
+            kernel = LocalNNGPKernel(lengthscale=0.15, variance=1.0)
+            A_grid = build_grid_interpolation_matrix(
+                site_coords=self.dataset.site_coords,
+                grid_coords=self.dataset.grid_coords,
+                kernel=kernel,
+                M=min(10, self.dataset.num_sites()),
+            )
 
             # Average over posterior samples
             eta_grid_samples = np.zeros((n_samples, n_grid))
@@ -209,15 +218,21 @@ class MarkedPointProcessResults:
                 beta_sites = self.beta_int_samples[sample_idx]  # (p_int+1, n_sites)
                 beta_grid = np.zeros((p_int_plus_1, n_grid))
 
+                # Interpolate each feature's coefficients to grid
                 for j in range(p_int_plus_1):
-                    A_grid = A_grid_list[j]
                     beta_grid[j] = A_grid @ beta_sites[j]
 
-                eta_grid_samples[sample_idx] = compute_eta_intensity(beta_grid, W_grid)
+                eta_grid_samples[sample_idx] = compute_eta_intensity(beta_grid, W_grid_clean)
 
             eta_grid_mean = eta_grid_samples.mean(axis=0)
             q = compute_q(eta_grid_mean)
-            return lambda_star_mean * q
+            intensity = lambda_star_mean * q
+
+            # Mark invalid grid points (where original W_grid had NaN) as NaN
+            invalid_mask = np.any(np.isnan(W_grid), axis=1)
+            intensity[invalid_mask] = np.nan
+
+            return intensity
 
         else:
             raise ValueError(f"location must be 'sites' or 'grid', got {location}")
@@ -370,6 +385,11 @@ class MarkedPointProcessSampler:
         n_U = 0
         U_coords = np.empty((0, 2))
 
+        # Get grid design matrix
+        W_grid = self.dataset.design_matrix_grid_intensity
+        if W_grid is None and self.dataset.grid_coords is not None:
+            W_grid = np.ones((len(self.dataset.grid_coords), 1))
+
         if self.dataset.grid_coords is not None and len(self.dataset.grid_coords) > 0:
             # (a) Sample pseudo-absence U ~ IPP(λ*(1-q))
             # Use current eta at grid points (interpolated from sites)
@@ -379,11 +399,11 @@ class MarkedPointProcessSampler:
             # Interpolate eta_int to grid using NNGP conditional mean
             if self.factor_cache is not None:
                 A_grid_list = self.factor_cache.A_grid_all()
-                eta_grid = np.zeros(n_grid)
+                beta_grid = np.zeros((p_int, n_grid))
                 for j in range(min(p_int, len(A_grid_list))):
                     A_grid = A_grid_list[j]
-                    beta_sites_j = self.beta_int_sites[j]
-                    eta_grid += A_grid @ beta_sites_j  # Simplified: assuming W_grid = 1
+                    beta_grid[j] = A_grid @ self.beta_int_sites[j]
+                eta_grid = compute_eta_intensity(beta_grid, W_grid)
             else:
                 eta_grid = np.zeros(n_grid)
 
@@ -407,7 +427,11 @@ class MarkedPointProcessSampler:
 
             # Create design matrix for combined points
             W_sites = self.dataset.design_matrix_intensity
-            W_U = np.ones((n_U, p_int))  # Intercept-only for U (simplified)
+            # Use grid design matrix for U points (at their sampled indices)
+            if W_grid is not None and W_grid.shape[1] == p_int:
+                W_U = W_grid[U_indices]
+            else:
+                W_U = np.ones((n_U, p_int))
             W_combined = np.vstack([W_sites, W_U])
 
             # Build NNGP factors for combined points (X ∪ U)
