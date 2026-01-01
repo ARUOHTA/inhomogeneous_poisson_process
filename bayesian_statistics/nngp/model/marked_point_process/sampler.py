@@ -27,6 +27,7 @@ from bayesian_statistics.nngp.model.sample import (
     LocalNNGPKernel,
     PolyaGammaSampler,
     compute_eta,
+    logratio_to_probs,
     softmax_with_baseline,
     update_beta_category,
 )
@@ -64,6 +65,8 @@ class MarkedPointProcessResults:
         Number of pseudo-absence points at each saved iteration.
     dataset : MarkedPointProcessDataset
         The dataset used for MCMC.
+    config : MarkedPointProcessConfig
+        The configuration used for MCMC.
     factor_cache : Optional[FactorCache]
         Cached NNGP factors for grid prediction (None if no grid).
     """
@@ -73,6 +76,7 @@ class MarkedPointProcessResults:
     beta_int_samples: np.ndarray
     n_pseudo_absence: List[int]
     dataset: MarkedPointProcessDataset
+    config: "MarkedPointProcessConfig"
     factor_cache: Optional["FactorCache"] = None
 
     def predict_probabilities(
@@ -222,7 +226,9 @@ class MarkedPointProcessResults:
                 for j in range(p_int_plus_1):
                     beta_grid[j] = A_grid @ beta_sites[j]
 
-                eta_grid_samples[sample_idx] = compute_eta_intensity(beta_grid, W_grid_clean)
+                eta_grid_samples[sample_idx] = compute_eta_intensity(
+                    beta_grid, W_grid_clean
+                )
 
             eta_grid_mean = eta_grid_samples.mean(axis=0)
             q = compute_q(eta_grid_mean)
@@ -236,6 +242,128 @@ class MarkedPointProcessResults:
 
         else:
             raise ValueError(f"location must be 'sites' or 'grid', got {location}")
+
+    def decompose_effects(
+        self,
+        location: str = "sites",
+    ) -> dict[str, np.ndarray]:
+        """Decompose mark probabilities into distance vs data-driven effects.
+
+        This method separates the contribution of distance prior from data-driven
+        adjustments, allowing interpretation of how much the model relies on
+        distance information versus observed composition patterns.
+
+        Parameters
+        ----------
+        location
+            Either "sites" or "grid".
+
+        Returns
+        -------
+        dict[str, np.ndarray]
+            Dictionary of effects, each with shape (K, n_locations):
+            - "distance": pure distance effect (no data influence)
+            - "intercept_adjustment": how data pulls away from distance baseline
+            - "intercept": combined intercept effect (distance + adjustment)
+            - "full": complete model including all covariates
+
+        Raises
+        ------
+        ValueError
+            If location is not "sites" or "grid".
+            If distance prior is not available in the dataset.
+        """
+        if self.dataset.distance_features_sites is None:
+            raise ValueError(
+                "Distance prior not available in dataset. "
+                "Please prepare dataset with distance_column_names parameter."
+            )
+
+        K_minus_1 = self.beta_mark_samples.shape[1]
+        beta_mean = self.beta_mark_samples.mean(axis=0)  # (K-1, p+1, n_sites)
+
+        if location == "sites":
+            W = self.dataset.design_matrix_marks
+            n_loc = self.dataset.num_sites()
+            g = self.dataset.distance_features_sites.T  # (K-1, n_sites)
+        elif location == "grid":
+            W = self.dataset.design_matrix_grid_marks
+            if W is None:
+                # If no mark covariates specified, use intercept only
+                n_loc = self.dataset.num_grid()
+                W = np.ones((n_loc, 1))
+            else:
+                n_loc = W.shape[0]
+            g = self.dataset.distance_features_grid.T  # (K-1, n_grid)
+
+            # Project beta to grid using NNGP conditional
+            if self.factor_cache is None:
+                raise ValueError("Grid prediction not available (no factor_cache)")
+
+            A_grid_list = self.factor_cache.A_grid_all()
+            beta_grid = np.zeros((K_minus_1, W.shape[1], n_loc))
+            for k in range(K_minus_1):
+                for j in range(W.shape[1]):
+                    beta_grid[k, j] = A_grid_list[j] @ beta_mean[k, j]
+                    # Add prior mean adjustment for intercept
+                    if j == 0:
+                        prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
+                        prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
+                        beta_grid[k, j] += prior_mean_grid - (
+                            A_grid_list[j] @ prior_mean_sites
+                        )
+            beta_mean = beta_grid
+        else:
+            raise ValueError(f"location must be 'sites' or 'grid', got {location}")
+
+        effects = {}
+
+        # Helper function: softmax without numerical stabilization
+        def softmax_no_stabilization(eta: np.ndarray) -> np.ndarray:
+            """Softmax with baseline, without max-subtraction."""
+            exp_eta = np.exp(eta)
+            sum_exp = exp_eta.sum(axis=0, keepdims=True)
+            baseline = 1.0 + sum_exp
+            probs_non_baseline = exp_eta / baseline
+            probs_baseline = 1.0 / baseline
+            return np.vstack([probs_non_baseline, probs_baseline])
+
+        # Get lambda values from config or use defaults
+        if self.config.lambda_fixed is not None:
+            lambda_vec = np.array(self.config.lambda_fixed)
+        else:
+            lambda_vec = np.ones(K_minus_1)
+
+        # 1. Distance prior effect only (baseline expectation)
+        logratio_dist = lambda_vec[:, np.newaxis] * g  # (K-1, n_loc)
+        effects["distance"] = logratio_to_probs(logratio_dist)
+
+        # 2. Data-driven adjustment to distance prior
+        eta_intercept = beta_mean[:, 0, :]  # (K-1, n_loc)
+        eta_adjustment = eta_intercept - logratio_dist  # delta_k(s)
+        effects["intercept_adjustment"] = softmax_no_stabilization(eta_adjustment)
+
+        # 3. Full intercept (distance + adjustment)
+        effects["intercept"] = softmax_no_stabilization(eta_intercept)
+
+        # 4. Individual covariates (if any beyond intercept)
+        p_plus_1 = beta_mean.shape[1]
+        if p_plus_1 > 1 and W is not None:
+            for j in range(1, p_plus_1):
+                # Note: mark variables might not have names, use index
+                w_j = W[:, j]
+                eta_j = beta_mean[:, j, :] * w_j
+                effects[f"covariate_{j}"] = softmax_no_stabilization(eta_j)
+
+            # 5. All covariates only (excluding intercept)
+            eta_covariates_only = compute_eta(beta_mean[:, 1:, :], W[:, 1:])
+            effects["covariates_only"] = softmax_no_stabilization(eta_covariates_only)
+
+        # 6. Full model (distance + adjustment + covariates)
+        eta_full = compute_eta(beta_mean, W)
+        effects["full"] = softmax_no_stabilization(eta_full)
+
+        return effects
 
 
 class MarkedPointProcessSampler:
@@ -275,37 +403,55 @@ class MarkedPointProcessSampler:
         K = self.dataset.num_categories()
         K_minus_1 = K - 1
 
-        # Use shared kernel for all categories (simplified)
-        kernel = LocalNNGPKernel(
-            lengthscale=self.config.mark_kernel_lengthscale,
-            variance=self.config.mark_kernel_variance,
-        )
-
         # Morton ordering for better locality
         self.mark_order = order_points_morton(self.dataset.site_coords)
 
-        # Build factors (same for intercept and all features)
-        self.mark_factors, _ = build_nngp_factors(
-            self.dataset.site_coords,
-            self.config.neighbor_count,
-            kernel,
-            order=self.mark_order,
-        )
-
         # For update_beta_category, we need one factor per feature (p+1)
         p_plus_1 = self.dataset.design_matrix_marks.shape[1]
-        self.mark_factors_by_feature = [self.mark_factors] * p_plus_1
+
+        # Build factors with per-feature kernels if provided
+        if self.config.mark_kernel_lengthscale_by_feature is not None:
+            lengthscales = list(self.config.mark_kernel_lengthscale_by_feature)
+            if len(lengthscales) != p_plus_1:
+                raise ValueError(
+                    f"mark_kernel_lengthscale_by_feature must have length {p_plus_1}, "
+                    f"got {len(lengthscales)}"
+                )
+        else:
+            lengthscales = [self.config.mark_kernel_lengthscale] * p_plus_1
+
+        if self.config.mark_kernel_variance_by_feature is not None:
+            variances = list(self.config.mark_kernel_variance_by_feature)
+            if len(variances) != p_plus_1:
+                raise ValueError(
+                    f"mark_kernel_variance_by_feature must have length {p_plus_1}, "
+                    f"got {len(variances)}"
+                )
+        else:
+            variances = [self.config.mark_kernel_variance] * p_plus_1
+
+        # Build one factor per feature
+        self.mark_factors_by_feature = []
+        kernels_for_cache = []
+        for j in range(p_plus_1):
+            kernel = LocalNNGPKernel(lengthscale=lengthscales[j], variance=variances[j])
+            factors, _ = build_nngp_factors(
+                self.dataset.site_coords,
+                self.config.neighbor_count,
+                kernel,
+                order=self.mark_order,
+            )
+            self.mark_factors_by_feature.append(factors)
+            kernels_for_cache.append(kernel)
 
         # Build FactorCache for grid predictions if grid is available
         self.factor_cache: Optional[FactorCache] = None
         if self.dataset.grid_coords is not None and len(self.dataset.grid_coords) > 0:
-            # Use same kernel for all features
-            kernels = [kernel] * p_plus_1
             self.factor_cache = FactorCache(
                 s_coords=self.dataset.site_coords,
                 grid_points=self.dataset.grid_coords,
                 M=self.config.neighbor_count,
-                kernels=kernels,
+                kernels=kernels_for_cache,
             )
 
     def _init_state(self):
@@ -317,7 +463,9 @@ class MarkedPointProcessSampler:
         p_int = self.dataset.design_matrix_intensity.shape[1]
 
         # Initialize lambda*
-        self.lambda_star = float(n_sites) / self.dataset.volume if self.dataset.volume > 0 else 1.0
+        self.lambda_star = (
+            float(n_sites) / self.dataset.volume if self.dataset.volume > 0 else 1.0
+        )
 
         # Initialize mark coefficients: beta[k, j, i] for category k, feature j, site i
         # Start with zeros
@@ -343,7 +491,9 @@ class MarkedPointProcessSampler:
         K_minus_1 = K - 1
         total_counts = self.dataset.total_counts
         W = self.dataset.design_matrix_marks
+        p_plus_1 = W.shape[1]
 
+        # Prepare prior means for each category (distance prior for intercept)
         for k in range(K_minus_1):
             # (e) Sample PG variables
             xi_k = sample_xi_mark(self.eta_marks[k], total_counts, self.rng)
@@ -352,7 +502,20 @@ class MarkedPointProcessSampler:
             counts_k = self.dataset.counts[:, k]
             kappa_tilde = compute_kappa_tilde_mark(counts_k, total_counts)
 
-            # (f) Update coefficients using Gibbs
+            # Prepare prior means for this category
+            # prior_mean_by_feature[j] = None/array for each feature j
+            prior_mean_by_feature = []
+            for j in range(p_plus_1):
+                if j == 0 and self.dataset.prior_mean_intercept_sites is not None:
+                    # Intercept: use distance prior
+                    prior_mean_by_feature.append(
+                        self.dataset.prior_mean_intercept_sites[k]  # (n_sites,)
+                    )
+                else:
+                    # Other features: no prior mean (defaults to 0)
+                    prior_mean_by_feature.append(None)
+
+            # (f) Update coefficients using Gibbs with distance prior
             self.beta_marks[k], self.eta_marks[k] = update_beta_category(
                 beta_k=self.beta_marks[k],
                 eta_k=self.eta_marks[k],
@@ -362,6 +525,7 @@ class MarkedPointProcessSampler:
                 omega=xi_k,
                 kappa_tilde=kappa_tilde,
                 rng=self.rng,
+                prior_mean_by_feature=prior_mean_by_feature,
             )
 
     def _sample_intensity(self, iteration: int) -> int:
@@ -394,7 +558,11 @@ class MarkedPointProcessSampler:
             # (a) Sample pseudo-absence U ~ IPP(λ*(1-q))
             # Use current eta at grid points (interpolated from sites)
             n_grid = len(self.dataset.grid_coords)
-            valid_mask = self.dataset.valid_grids if self.dataset.valid_grids is not None else np.ones(n_grid, dtype=bool)
+            valid_mask = (
+                self.dataset.valid_grids
+                if self.dataset.valid_grids is not None
+                else np.ones(n_grid, dtype=bool)
+            )
 
             # Interpolate eta_int to grid using NNGP conditional mean
             if self.factor_cache is not None:
@@ -572,5 +740,6 @@ class MarkedPointProcessSampler:
             beta_int_samples=beta_int_samples,
             n_pseudo_absence=n_pseudo_absence,
             dataset=self.dataset,
+            config=self.config,
             factor_cache=self.factor_cache,
         )

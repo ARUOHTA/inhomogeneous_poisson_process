@@ -96,8 +96,7 @@ class MarkedPointProcessDataset:
 
         if n_counts_rows != n_sites:
             raise ValueError(
-                f"counts rows ({n_counts_rows}) must match "
-                f"site_coords rows ({n_sites})"
+                f"counts rows ({n_counts_rows}) must match site_coords rows ({n_sites})"
             )
 
         if n_origins != n_categories:
@@ -176,6 +175,12 @@ def prepare_marked_point_process_dataset(
     grid_subsample_ratio: float = 0.01,
     drop_zero_total_sites: bool = True,
     intensity_variable_names: Optional[Sequence[str]] = None,
+    mark_variable_names: Optional[Sequence[str]] = None,
+    distance_column_names: Optional[Sequence[str]] = None,
+    source_weights: Optional[Sequence[float]] = None,
+    tau: float = 1.0,
+    alpha: float = 1.0,
+    lambda_fixed: Optional[Sequence[float]] = None,
 ) -> MarkedPointProcessDataset:
     """Prepare dataset for the marked point process model.
 
@@ -199,6 +204,23 @@ def prepare_marked_point_process_dataset(
         If None, only intercept is used.
         Available variables include: "average_elevation", "average_slope_angle",
         "cost_river", etc. (see preprocessor schema).
+    mark_variable_names
+        Variable names to use as covariates for mark (composition) model.
+        If None, only intercept is used.
+    distance_column_names
+        Column names for distance data (length K-1, excluding baseline).
+        If provided, distance prior will be computed for mark intercepts.
+        Example: ["cost_kouzu", "cost_shinshu", "cost_hakone", "cost_takahara"]
+    source_weights
+        Source importance weights (length K-1). Used with distance_column_names.
+        If None, use uniform weights.
+    tau
+        Temperature parameter for weighted inverse softmax (distance prior).
+    alpha
+        Importance weight exponent (distance prior).
+    lambda_fixed
+        Scaling factors for distance prior mean (length K-1).
+        If None, use 1.0 for all categories.
 
     Returns
     -------
@@ -210,18 +232,27 @@ def prepare_marked_point_process_dataset(
     >>> preprocessor = ObsidianDataPreprocessor(data_dir)
     >>> preprocessor.load_data()
     >>> origins = ["神津島", "信州", "箱根", "高原山", "その他"]
-    >>> # With covariates
+    >>> # With intensity covariates
     >>> dataset = prepare_marked_point_process_dataset(
     ...     preprocessor, period=2, origins=origins,
     ...     intensity_variable_names=["average_elevation", "average_slope_angle"],
+    ... )
+    >>> # With distance prior for marks
+    >>> dataset = prepare_marked_point_process_dataset(
+    ...     preprocessor, period=2, origins=origins,
+    ...     distance_column_names=["cost_kouzu", "cost_shinshu", "cost_hakone", "cost_takahara"],
+    ...     source_weights=[2, 1, 0.05, 0.05],
     ... )
     """
     import polars as pl
 
     from bayesian_statistics.nngp.model.multinomial_model import _prepare_counts
+    from bayesian_statistics.nngp.model.sample import compute_distance_features
 
     # Get counts using the shared utility function
     counts, totals = _prepare_counts(preprocessor, period, origins)
+    K = len(origins)
+    K_minus_1 = K - 1
 
     # Get site coordinates
     site_df = preprocessor.df_sites.sort("遺跡ID")
@@ -244,15 +275,43 @@ def prepare_marked_point_process_dataset(
         )
         # Add intercept
         n_sites_full = W_sites.shape[0]
-        design_matrix_intensity_sites = np.column_stack([
-            np.ones(n_sites_full),
-            W_sites,
-        ])
+        design_matrix_intensity_sites = np.column_stack(
+            [
+                np.ones(n_sites_full),
+                W_sites,
+            ]
+        )
         n_grids_full = W_grids.shape[0]
-        design_matrix_intensity_grids_full = np.column_stack([
-            np.ones(n_grids_full),
-            W_grids,
-        ])
+        design_matrix_intensity_grids_full = np.column_stack(
+            [
+                np.ones(n_grids_full),
+                W_grids,
+            ]
+        )
+
+    # Get mark covariates from preprocessor
+    design_matrix_marks_sites = None
+    design_matrix_marks_grids_full = None
+
+    if mark_variable_names is not None and len(mark_variable_names) > 0:
+        W_grids_mark, W_sites_mark = preprocessor.create_explanatory_variables(
+            list(mark_variable_names)
+        )
+        # Add intercept
+        n_sites_full = W_sites_mark.shape[0]
+        design_matrix_marks_sites = np.column_stack(
+            [
+                np.ones(n_sites_full),
+                W_sites_mark,
+            ]
+        )
+        n_grids_full = W_grids_mark.shape[0]
+        design_matrix_marks_grids_full = np.column_stack(
+            [
+                np.ones(n_grids_full),
+                W_grids_mark,
+            ]
+        )
 
     # Filter sites with zero total count
     if drop_zero_total_sites:
@@ -265,6 +324,8 @@ def prepare_marked_point_process_dataset(
         site_ids = site_ids[mask]
         if design_matrix_intensity_sites is not None:
             design_matrix_intensity_sites = design_matrix_intensity_sites[mask]
+        if design_matrix_marks_sites is not None:
+            design_matrix_marks_sites = design_matrix_marks_sites[mask]
 
     # Prepare grid data
     elevation_df = preprocessor.df_elevation.sort(["y", "x"])
@@ -289,10 +350,93 @@ def prepare_marked_point_process_dataset(
             design_matrix_grid_intensity = design_matrix_intensity_grids_full[indices]
         else:
             design_matrix_grid_intensity = None
+        if design_matrix_marks_grids_full is not None:
+            design_matrix_grid_marks = design_matrix_marks_grids_full[indices]
+        else:
+            design_matrix_grid_marks = None
     else:
         grid_coords = grid_coords_full
         valid_grids = (~is_sea_full) & is_valid_full
         design_matrix_grid_intensity = design_matrix_intensity_grids_full
+        design_matrix_grid_marks = design_matrix_marks_grids_full
+
+    # Compute distance features for distance prior (optional)
+    distance_features_sites = None
+    distance_features_grid = None
+    prior_mean_intercept_sites = None
+    prior_mean_intercept_grid = None
+
+    if distance_column_names is not None and len(distance_column_names) > 0:
+        if len(distance_column_names) != K_minus_1:
+            raise ValueError(
+                f"distance_column_names must have length {K_minus_1}, "
+                f"got {len(distance_column_names)}"
+            )
+
+        # Extract distance data from preprocessor
+        dist_sites_full = site_df.select(distance_column_names).to_numpy().astype(float)
+        dist_grid_full = elevation_df.select(distance_column_names).to_numpy().astype(float)
+
+        # Apply site filtering (same as coords)
+        dist_sites = dist_sites_full[site_ids]
+
+        # Apply grid subsampling
+        if grid_subsample_ratio < 1.0:
+            dist_grid = dist_grid_full[indices]
+        else:
+            dist_grid = dist_grid_full
+
+        # Compute Z-scores
+        mean_dist = dist_grid_full.mean(axis=0, keepdims=True)
+        std_dist = dist_grid_full.std(axis=0, keepdims=True)
+        std_dist = np.where(std_dist < 1e-12, 1.0, std_dist)
+
+        Z_sites = (dist_sites - mean_dist) / std_dist
+        Z_grid = (dist_grid - mean_dist) / std_dist
+
+        # Add dummy distance for baseline category (high Z-score = far away)
+        baseline_z_sites = np.full((Z_sites.shape[0], 1), 3.0, dtype=float)
+        baseline_z_grid = np.full((Z_grid.shape[0], 1), 3.0, dtype=float)
+        Z_sites_with_baseline = np.column_stack([Z_sites, baseline_z_sites])
+        Z_grid_with_baseline = np.column_stack([Z_grid, baseline_z_grid])
+
+        # Set source weights
+        if source_weights is None:
+            w = np.ones(K, dtype=float)
+        else:
+            if len(source_weights) != K_minus_1:
+                raise ValueError(
+                    f"source_weights must have length {K_minus_1}, "
+                    f"got {len(source_weights)}"
+                )
+            w = np.array(list(source_weights) + [1.0], dtype=float)
+
+        # Compute distance features (log-ratio) using DRY principle
+        distance_features_sites = compute_distance_features(
+            Z_sites_with_baseline, w, tau=tau, alpha=alpha
+        )  # (n_sites, K-1)
+        distance_features_grid = compute_distance_features(
+            Z_grid_with_baseline, w, tau=tau, alpha=alpha
+        )  # (n_grid, K-1)
+
+        # Set lambda values
+        if lambda_fixed is None:
+            lambda_vec = np.ones(K_minus_1, dtype=float)
+        else:
+            if len(lambda_fixed) != K_minus_1:
+                raise ValueError(
+                    f"lambda_fixed must have length {K_minus_1}, "
+                    f"got {len(lambda_fixed)}"
+                )
+            lambda_vec = np.array(lambda_fixed, dtype=float)
+
+        # Compute prior means for intercept: mu_k(s) = lambda_k * g_k(s)
+        prior_mean_intercept_sites = (
+            lambda_vec[:, np.newaxis] * distance_features_sites.T
+        )  # (K-1, n_sites)
+        prior_mean_intercept_grid = (
+            lambda_vec[:, np.newaxis] * distance_features_grid.T
+        )  # (K-1, n_grid)
 
     # Compute region from grid
     region = [
@@ -307,9 +451,15 @@ def prepare_marked_point_process_dataset(
         site_ids=site_ids,
         total_counts=totals,
         design_matrix_intensity=design_matrix_intensity_sites,
+        design_matrix_marks=design_matrix_marks_sites,
         grid_coords=grid_coords,
         design_matrix_grid_intensity=design_matrix_grid_intensity,
+        design_matrix_grid_marks=design_matrix_grid_marks,
         valid_grids=valid_grids,
         region=region,
         period=period,
+        distance_features_sites=distance_features_sites,
+        distance_features_grid=distance_features_grid,
+        prior_mean_intercept_sites=prior_mean_intercept_sites,
+        prior_mean_intercept_grid=prior_mean_intercept_grid,
     )

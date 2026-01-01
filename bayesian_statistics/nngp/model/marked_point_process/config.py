@@ -43,6 +43,14 @@ class MarkedPointProcessConfig:
         Shape parameter (m_0) for the Gamma prior on lambda*.
     lambda_prior_rate : float
         Rate parameter (r_0) for the Gamma prior on lambda*.
+    tau : float
+        Temperature parameter for distance-based weighted inverse softmax.
+    alpha : float
+        Importance weight exponent for distance prior.
+    source_weights : Optional[Sequence[float]]
+        Source importance weights for distance prior (length K-1).
+    lambda_fixed : Optional[Sequence[float]]
+        Fixed scaling factors for distance prior mean (length K-1).
     """
 
     # MCMC settings
@@ -67,6 +75,12 @@ class MarkedPointProcessConfig:
     # Lambda* prior: Gamma(shape, rate)
     lambda_prior_shape: float = 2.0
     lambda_prior_rate: float = 1.0
+
+    # Distance prior hyperparameters (for mark intercepts)
+    tau: float = 1.0  # Temperature for weighted inverse softmax
+    alpha: float = 1.0  # Weight on source importance
+    source_weights: Optional[Sequence[float]] = None  # Importance weights (K-1,)
+    lambda_fixed: Optional[Sequence[float]] = None  # Fixed scaling (K-1,) or None
 
     def n_saved(self) -> int:
         """Compute the number of posterior samples that will be saved.
