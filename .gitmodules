@@ -1,0 +1,3 @@
+[submodule "260128_master_thesis"]
+	path = 260128_master_thesis
+	url = git@github.com:ARUOHTA/260128_master_thesis.git
