@@ -170,7 +170,7 @@ def calculate_minimum_cost_to_geometry(
 
 
 if __name__ == "__main__":
-    data_dir = "/home/ohta/dev/bayesian_statistics/data"
+    data_dir = "data"
 
     # データの読み込み
     df_elevation = pl.read_csv(os.path.join(data_dir, "10_1_gdf_elevation_tobler.csv"))
@@ -202,5 +202,5 @@ if __name__ == "__main__":
 
     # 保存
     df_elevation.write_csv(
-        "/home/ohta/dev/bayesian_statistics/data/10_2_gdf_elevation_with_costs.csv"
+        os.path.join(data_dir, "10_2_gdf_elevation_with_costs.csv")
     )

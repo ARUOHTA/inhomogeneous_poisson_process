@@ -79,6 +79,52 @@ class MarkedPointProcessResults:
     config: "MarkedPointProcessConfig"
     factor_cache: Optional["FactorCache"] = None
 
+    def _project_beta_to_grid(self, beta_sites: np.ndarray) -> np.ndarray:
+        """Project site-level beta coefficients to grid using NNGP conditional.
+
+        This method handles the prior mean adjustment for intercept when
+        distance prior is used. The adjustment ensures that the spatial
+        interpolation correctly accounts for the non-zero prior mean.
+
+        Parameters
+        ----------
+        beta_sites : np.ndarray
+            Site-level coefficients with shape (K-1, p+1, n_sites).
+
+        Returns
+        -------
+        np.ndarray
+            Grid-level coefficients with shape (K-1, p+1, n_grid).
+
+        Raises
+        ------
+        ValueError
+            If factor_cache is not available.
+        """
+        if self.factor_cache is None:
+            raise ValueError("Grid prediction not available (no factor_cache)")
+
+        K_minus_1, p_plus_1, _ = beta_sites.shape
+        n_grid = self.dataset.num_grid()
+        A_grid_list = self.factor_cache.A_grid_all()
+
+        beta_grid = np.zeros((K_minus_1, p_plus_1, n_grid))
+
+        for k in range(K_minus_1):
+            for j in range(p_plus_1):
+                A_grid = A_grid_list[j]
+                beta_grid[k, j] = A_grid @ beta_sites[k, j]
+
+                # Adjust for prior mean on intercept when distance prior is used
+                if j == 0 and self.dataset.prior_mean_intercept_grid is not None:
+                    prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
+                    prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
+                    # Correct for the difference between grid prior mean and
+                    # the interpolated site prior mean
+                    beta_grid[k, j] += prior_mean_grid - (A_grid @ prior_mean_sites)
+
+        return beta_grid
+
     def predict_probabilities(
         self,
         location: str = "sites",
@@ -120,14 +166,13 @@ class MarkedPointProcessResults:
                 n_grid = len(self.dataset.grid_coords)
                 W = np.ones((n_grid, 1))
 
-            n_loc = W.shape[0]
-            A_grid_list = self.factor_cache.A_grid_all()
-
             if sample_conditional:
                 # Sample beta_grid from GP conditional
+                n_loc = W.shape[0]
+                A_grid_list = self.factor_cache.A_grid_all()
+                d_grid_list = self.factor_cache.d_grid_all()
                 rng = np.random.default_rng(seed)
                 beta_grid_samples = np.zeros((n_samples, K_minus_1, W.shape[1], n_loc))
-                d_grid_list = self.factor_cache.d_grid_all()
 
                 for sample_idx in range(n_samples):
                     beta_sites = self.beta_mark_samples[sample_idx]
@@ -137,19 +182,22 @@ class MarkedPointProcessResults:
                             d_grid = d_grid_list[j]
                             beta_sites_j = beta_sites[k, j]
                             mu_cond = A_grid @ beta_sites_j
+
+                            # Apply prior mean adjustment for intercept
+                            if j == 0 and self.dataset.prior_mean_intercept_grid is not None:
+                                prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
+                                prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
+                                mu_cond = mu_cond + prior_mean_grid - (A_grid @ prior_mean_sites)
+
                             std_cond = np.sqrt(np.maximum(d_grid, 1e-12))
                             beta_grid_samples[sample_idx, k, j] = rng.normal(
                                 mu_cond, std_cond
                             )
                 beta_mean = beta_grid_samples.mean(axis=0)
             else:
-                # Use posterior mean projection
+                # Use posterior mean projection with prior mean adjustment
                 beta_sites_mean = self.beta_mark_samples.mean(axis=0)
-                beta_mean = np.zeros((K_minus_1, W.shape[1], n_loc))
-                for k in range(K_minus_1):
-                    for j in range(W.shape[1]):
-                        A_grid = A_grid_list[j]
-                        beta_mean[k, j] = A_grid @ beta_sites_mean[k, j]
+                beta_mean = self._project_beta_to_grid(beta_sites_mean)
         else:
             raise ValueError(f"location must be 'sites' or 'grid', got {location}")
 
@@ -296,23 +344,8 @@ class MarkedPointProcessResults:
                 n_loc = W.shape[0]
             g = self.dataset.distance_features_grid.T  # (K-1, n_grid)
 
-            # Project beta to grid using NNGP conditional
-            if self.factor_cache is None:
-                raise ValueError("Grid prediction not available (no factor_cache)")
-
-            A_grid_list = self.factor_cache.A_grid_all()
-            beta_grid = np.zeros((K_minus_1, W.shape[1], n_loc))
-            for k in range(K_minus_1):
-                for j in range(W.shape[1]):
-                    beta_grid[k, j] = A_grid_list[j] @ beta_mean[k, j]
-                    # Add prior mean adjustment for intercept
-                    if j == 0:
-                        prior_mean_grid = self.dataset.prior_mean_intercept_grid[k]
-                        prior_mean_sites = self.dataset.prior_mean_intercept_sites[k]
-                        beta_grid[k, j] += prior_mean_grid - (
-                            A_grid_list[j] @ prior_mean_sites
-                        )
-            beta_mean = beta_grid
+            # Project beta to grid using NNGP conditional with prior mean adjustment
+            beta_mean = self._project_beta_to_grid(beta_mean)
         else:
             raise ValueError(f"location must be 'sites' or 'grid', got {location}")
 
