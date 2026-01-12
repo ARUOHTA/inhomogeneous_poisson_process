@@ -33,6 +33,7 @@ dependencies = [
     "gpy>=1.13.2",
     "pymc>=5.12.0",
     "pypolyagamma>=1.2.3",
+    "mpxpy>=0.0.18",
 ]
 
 [build-system]

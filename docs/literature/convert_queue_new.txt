@@ -1,0 +1,13 @@
+# 新規論文変換キュー
+# 使い方: ./scripts/batch_pdf2md.sh docs/literature/convert_queue_new.txt
+
+# 基礎理論（Otherフォルダ）
+Other/Aitchison 1983 - Principal component analysis of compositional data.pdf
+Other/Warton and Shepherd 2010 - Poisson point process models solve the "pseudo-absence problem" for presence-only data in ecology.pdf
+Other/Diggle et al. 1998 - Model-based geostatistics.pdf
+Other/Møller et al. 1998 - Log Gaussian Cox processes.pdf
+Other/Vecchia 1988 - Estimation and model identification for continuous spatial processes.pdf
+Other/Gneiting and Raftery 2007 - Strictly proper scoring rules, prediction, and estimation.pdf
+Other/Cressie and Johannesson 2008 - Fixed rank kriging for very large spatial data sets - Fixed Rank Kriging.pdf
+Other/Pawlowsky-Glahn and Egozcue 2001 - Geometric approach to statistical analysis on the simplex.pdf
+Other/Diggle et al. 2013 - Spatial and Spatio-Temporal Log-Gaussian Cox Processes - Extending the Geostatistical Paradigm.pdf

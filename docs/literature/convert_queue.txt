@@ -1,0 +1,30 @@
+# 変換キュー - 優先度順
+# 使い方: ./scripts/batch_pdf2md.sh docs/literature/convert_queue.txt
+
+# ★★★ 最優先（完了）
+# E/Eckardt et al. 2025 - On spatial point processes with composition-valued marks.pdf
+# G/Gelfand and Schliep 2018 - Bayesian inference and computing for spatial point patterns.pdf
+# G/Gelfand and Shirota 2019 - Preferential sampling for presence - absence data and for fusion of presence - absence data with presence‐only data.pdf
+# G/Gonçalves and Gamerman 2018 - Exact Bayesian inference in spatiotemporal Cox processes driven by multivariate Gaussian processes.pdf
+
+# ★★ 高優先
+F/Fithian and Hastie 2013 - Finite-Sample Equivalence in Statistical Models for Presence-Only Data.pdf
+D/Dorazio 2014 - Accounting for imperfect detection and survey bias in statistical analysis of presence‐only data.pdf
+P/Pacifici et al. 2017 - Integrating multiple data sources in species distribution modeling - a framework for data fusion.pdf
+Z/Zens et al. 2023 - Ultimate pólya gamma samplers–efficient MCMC for possibly imbalanced binary and categorical data.pdf
+W/Wehrhahn et al. 2022 - Dependent Bayesian nonparametric modeling of compositional data using random Bernstein polynomials.pdf
+A/Adams et al. 2009 - Tractable nonparametric Bayesian inference in Poisson processes with Gaussian process intensities.pdf
+
+# ★ 中優先
+G/Gelfand et al. 2003 - Spatial Modeling with Spatially Varying Coefficient Processes.pdf
+F/Finley and Banerjee 2020 - Bayesian spatially varying coefficient models in the spBayes R package.pdf
+R/Rue et al. 2009 - Approximate Bayesian Inference for Latent Gaussian models by using Integrated Nested Laplace Approximations.pdf
+B/Barbet-Massin et al. 2012 - Selecting pseudo‐absences for species distribution models - how, where and how many.pdf
+P/Phillips et al. 2006 - Maximum entropy modeling of species geographic distributions.pdf
+C/Cecconi et al. 2016 - Preferential sampling and Bayesian geostatistics - Statistical modeling and examples.pdf
+N/Narayanan et al. 2021 - Flexible marked spatio-temporal point processes with applications to event sequences from association football.pdf
+
+# ☆ 参考
+B/Blei and Jordan 2006 - Variational inference for Dirichlet process mixtures.pdf
+W/Walker 2007 - Sampling the Dirichlet mixture model with slices.pdf
+Q/Quintana et al. 2020 - The dependent Dirichlet process and related models.pdf
