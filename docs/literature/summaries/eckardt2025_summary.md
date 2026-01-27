@@ -1,11 +1,12 @@
 # Eckardt et al. (2025) - 組成値マーク付き空間点過程
 
 ## 基本情報
-- **タイトル**: On spatial point processes with composition-valued marks
-- **著者**: Matthias Eckardt, Mari Myllymäki, Sonja Greven
-- **ジャーナル**: Spatial Statistics（推定）
+- **タイトル**: On Spatial Point Processes With Composition-Valued Marks
+- **著者**: Matthias Eckardt (Humboldt-Universität zu Berlin), Mari Myllymäki (Natural Resources Institute Finland), Sonja Greven (Humboldt-Universität zu Berlin)
+- **ジャーナル**: International Statistical Review (Wiley)
 - **年**: 2025
-- **DOI**: 未確認
+- **DOI**: 10.1111/insr.70019
+- **キーワード**: business sector composition; compositional data analysis; crown-to-base ratios; mark correlation function; mark variogram; marked spatial point processes
 - **関連論点**: 論点2（組成データ）、論点3（点過程）、論点4（統合の困難さ）
 
 ## 主な貢献
@@ -165,16 +166,18 @@ Eckardt et al. (2025)は「組成値マーク付き空間点過程」という�
 
 ## 引用すべき箇所
 
-### 組成値マークの定義（Section 2）
-> "We call a real-valued function $\mathbf{c}: \mathbb{R}^2 \to \mathbb{S}^D$ that assigns to each point $x_i$ a $D$-part composition $\mathbf{c}(x_i) = (c_1(x_i), \ldots, c_D(x_i))$ from the open unit $D$-simplex $\mathbb{S}^D$ a composition-valued mark."
+### 組成値マークの定義（Section 3.1）
+> "To extend spatial point processes to composition-valued marks, let $\{(x_i, \mathbf{c}(x_i))\}_{i=1}^{n}$ denote a set of $n$ points $x_i \in \mathbb{R}^2$ with associated marks $\mathbf{c}(x_i) = (c_1(x_i), \ldots, c_D(x_i))^\top$ living in a $D$-part simplex $\mathbb{S}^D \subset \mathbb{R}^D$."
 
-### Aitchison幾何学の正当化（Section 2.1）
-> "Our proposed set of different (functional) mark summary characteristics allows to decide on the mark independence assumption and investigate the pairwise dependencies of a new type of marked spatial point process. All developments are formalized through extended test functions, which generalise well-known interpretations to the present context."
+### 研究ギャップの明示（Section 1: Introduction）
+> "However, there are no methods available for the joint analysis of (constrained) vector-valued marks."
 
-### 変換の統一性（Section 2.2）
-> "Transforming the composition-valued marks to the Euclidean space, the proposed tools can build on established methods for real-valued marks and can borrow strength from existing computational implementations."
+> "To our knowledge, composition-valued marked point processes are examined here for the first time."
 
-### 組成全体 vs 成分別の分解（Section 3.5）
+### Aitchison幾何学と変換（Section 3.2）
+> "Due to the isometric isomorphism established between the Aitchison and the Euclidean geometry by the clr and the ilr transformations, the Aitchison inner product, distances and metrics coincide with their Euclidean counterparts on the transformed quantities."
+
+### 組成全体の特性（Section 3.5）
 > "$\gamma_{\mathbf{cc}}(r) = \sum_{j=1}^D \gamma_{jj}^{\text{clr}}(r) = \sum_{j=1}^{D-1} \gamma_{jj}^{\text{ilr}}(r)$
 > which allows to evaluate which individual components contribute to the overall mark characteristic."
 
