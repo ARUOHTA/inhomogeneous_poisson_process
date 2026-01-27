@@ -167,11 +167,12 @@ class Model3Pipeline:
         self._nw_estimator = NadarayaWatsonEstimator(
             sigma=self.config.nw_sigma,
             sigma_for_sites=self.config.nw_sigma_for_sites,
+            variable_names=self.config.nw_variable_names,
         )
 
         # モデルの学習
         print("重み行列を計算しています...")
-        self._nw_estimator.fit(preprocessor, self.config.nw_variable_names)
+        self._nw_estimator.fit(preprocessor)
 
         # 全時期・全産地の推定
         print("\n全時期・全産地の推定を実行しています...")
@@ -228,11 +229,12 @@ class Model3Pipeline:
             sigma_for_sites=self.config.nw_sigma_for_sites,
             alpha_0=alpha_0,
             gamma_0=gamma_0,
+            variable_names=self.config.nw_variable_names,
         )
 
         # モデルの学習
         print("重み行列を計算しています...")
-        self._nw_bayes_estimator.fit(preprocessor, self.config.nw_variable_names)
+        self._nw_bayes_estimator.fit(preprocessor)
 
         # 全時期・全産地の推定
         print("\n全時期・全産地の推定を実行しています...")

@@ -319,8 +319,9 @@ class LOOCVEvaluator:
             nw_estimator = NadarayaWatsonEstimator(
                 sigma=self.model_config.nw_sigma,
                 sigma_for_sites=self.model_config.nw_sigma_for_sites,
+                variable_names=self.model_config.nw_variable_names,
             )
-            nw_estimator.fit(excluded_preprocessor, self.model_config.nw_variable_names)
+            nw_estimator.fit(excluded_preprocessor)
 
             # 3. テスト遺跡での構成比を予測
             # まず対象遺跡の座標を取得

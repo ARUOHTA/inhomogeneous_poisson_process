@@ -228,6 +228,8 @@ class ObsidianDataPreprocessor:
         """
         Tobler距離を読み込む
 
+        Tobler距離ファイルが存在しない場合は、ユークリッド距離にフォールバックする。
+
         Parameters
         ----------
         distance_dir : str
@@ -238,6 +240,8 @@ class ObsidianDataPreprocessor:
         np.ndarray
             距離行列 (グリッド数, 遺跡数)
         """
+        import warnings
+
         if self._df_obsidian is None or self._df_elevation is None:
             raise ValueError(
                 "データが読み込まれていません。load_data()を先に実行してください。"
@@ -247,17 +251,50 @@ class ObsidianDataPreprocessor:
         site_coords = self.create_site_coords()
         grid_coords = self.create_grid_coords()
 
+        distance_path = os.path.join(self.data_dir, distance_dir)
+
+        # Tobler距離ファイルが存在しない場合はユークリッド距離にフォールバック
+        if not os.path.exists(distance_path):
+            warnings.warn(
+                f"Tobler距離ディレクトリが見つかりません: {distance_path}\n"
+                "ユークリッド距離にフォールバックします。",
+                UserWarning,
+            )
+            return self._compute_euclidean_distances(grid_coords, site_coords)
+
         # 距離行列の読み込み
         distances = np.zeros((len(grid_coords), len(site_coords)))
         for i in range(len(site_coords)):
             with open(
-                os.path.join(self.data_dir, distance_dir, f"distance_siteID_{i}"),
+                os.path.join(distance_path, f"distance_siteID_{i}"),
                 mode="br",
             ) as fi:
                 min_costs = pickle.load(fi)
                 distances[:, i] = min_costs
 
         return distances
+
+    def _compute_euclidean_distances(
+        self, grid_coords: np.ndarray, site_coords: np.ndarray
+    ) -> np.ndarray:
+        """
+        ユークリッド距離を計算（フォールバック用）
+
+        Parameters
+        ----------
+        grid_coords : np.ndarray
+            グリッド座標 (グリッド数, 2)
+        site_coords : np.ndarray
+            遺跡座標 (遺跡数, 2)
+
+        Returns
+        -------
+        np.ndarray
+            距離行列 (グリッド数, 遺跡数)
+        """
+        from scipy.spatial.distance import cdist
+
+        return cdist(grid_coords, site_coords)
 
     def create_explanatory_variables(
         self, variable_names: List[str]

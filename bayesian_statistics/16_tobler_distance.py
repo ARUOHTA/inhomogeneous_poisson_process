@@ -46,7 +46,9 @@ def create_site_coords(df: pl.DataFrame) -> np.ndarray:
 
 
 # %%
-data_dir = "/home/ohta/dev/bayesian_statistics/data/"
+from pathlib import Path
+
+data_dir = str(Path(__file__).parent.parent / "data") + "/"
 
 SCHEMA = pl.Schema(
     {
