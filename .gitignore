@@ -235,3 +235,4 @@ out/
 *.synctex.gz
 *.dvi
 *.xdv
+.DS_Store

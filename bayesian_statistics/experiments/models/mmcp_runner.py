@@ -140,7 +140,7 @@ class MMCPRunner:
             grid_subsample_ratio=self.config.grid_subsample_ratio,
             drop_zero_total_sites=True,
             intensity_variable_names=self.config.intensity_variable_names,
-            mark_variable_names=None,  # Use distance prior only
+            mark_variable_names=self.config.mark_variable_names,
             distance_column_names=self.config.distance_column_names,
             source_weights=self.config.source_weights,
             lambda_fixed=self.config.lambda_fixed,
